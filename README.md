@@ -6,7 +6,6 @@
 
 ![Cluster Summary](docs/images/app_screenshot_2.png)
 
----
 
 ## Features
 
@@ -18,7 +17,6 @@
   Copy/repartition images into cluster-specific folders with a single click. Generates a summary CSV for downstream use.
 * **Clustering Summary:**
   Displays cluster sizes, variances, and representative images for each cluster, helping you evaluate clustering quality.
----
 
 ## Installation
 
@@ -28,7 +26,6 @@ uv venv .venv
 source .venv/bin/activate
 uv pip install -r requirements.txt
 ```
----
 
 ## Usage
 
@@ -39,17 +36,12 @@ source .venv/bin/activate
 streamlit run app.py
 ```
 
----
-
----
-
 ## Acknowledgements
 
-* [OpenAI CLIP](https://github.com/openai/CLIP)
+* [CLIP](https://github.com/openai/CLIP)
 * [Streamlit](https://streamlit.io/)
 * [Altair](https://altair-viz.github.io/)
 
----
 
 ## License
 
