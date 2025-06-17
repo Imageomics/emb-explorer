@@ -28,53 +28,117 @@ def main():
     
     with st.container():
         with col_settings:
-            #st.title("Image Clustering Tool")
-            with st.expander("Embed", expanded=True):
-                image_dir = st.text_input("Image folder path")
-                model_name = st.selectbox("Model", ["CLIP ViT-B/32"])
-                #device = st.selectbox("Device", ["cuda", "cpu"])
-                col1, col2 = st.columns(2)
-                with col1:
-                    n_workers = st.number_input(
-                        "N workers", 
+            tab_compute, tab_save = st.tabs(["Compute", "Save"])
+            with tab_compute:
+                with st.expander("Embed", expanded=True):
+                    image_dir = st.text_input("Image folder path")
+                    model_name = st.selectbox("Model", ["CLIP ViT-B/32"])
+                    #device = st.selectbox("Device", ["cuda", "cpu"])
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        n_workers = st.number_input(
+                            "N workers", 
+                            min_value=1, 
+                            max_value=64, 
+                            value=16, 
+                            step=1
+                        )
+                    with col2:
+                        batch_size = st.number_input(
+                            "Batch size", 
+                            min_value=1, 
+                            max_value=2048, 
+                            value=32, 
+                            step=1
+                        )
+                    embed_button = st.button("Run Embedding")
+                    
+                with st.expander("Cluster", expanded=False):
+                    n_clusters = st.slider("Number of clusters", 2, 100, 5)
+                    reduction_method = st.selectbox("Dimensionality Reduction", ["TSNE", "PCA"])
+                    cluster_button = st.button("Run Clustering")
+            
+            with tab_save:
+                # --- Save images from a specific cluster utility ---
+                save_status_placeholder = st.empty()
+                with st.expander("Save Images from Specific Cluster", expanded=True):
+                    df_plot = st.session_state.get("data", None)
+                    labels = st.session_state.get("labels", None)
+                    if df_plot is not None and labels is not None:
+                        available_clusters = sorted(df_plot['cluster'].unique(), key=lambda x: int(x))
+                        selected_clusters = st.multiselect(
+                            "Select cluster(s) to save",
+                            available_clusters,
+                            default=available_clusters[:1],
+                            key="save_cluster_select"
+                        )
+                        save_dir = st.text_input(
+                            "Directory to save selected cluster images",
+                            value="cluster_selected_output",
+                            key="save_cluster_dir"
+                        )
+                        save_cluster_button = st.button("Save images", key="save_cluster_btn")
+                    else:
+                        st.info("Run clustering first to enable this utility.")
+                        
+                # --- Repartition expander and status ---
+                repartition_status_placeholder = st.empty()  # For progress and status
+                with st.expander("Repartition Images by Cluster", expanded=False):
+                    st.markdown("**Target directory for repartitioned images (will be created):**")
+                    repartition_dir = st.text_input(
+                        "Directory", 
+                        value="repartitioned_output",
+                        key="repartition_dir"
+                    )
+                    max_workers = st.number_input(
+                        "Number of threads (higher = faster, try 8–32)", 
                         min_value=1, 
                         max_value=64, 
-                        value=16, 
-                        step=1
+                        value=8,
+                        step=1,
+                        key="num_threads"
                     )
-                with col2:
-                    batch_size = st.number_input(
-                        "Batch size", 
-                        min_value=1, 
-                        max_value=2048, 
-                        value=32, 
-                        step=1
-                    )
-                embed_button = st.button("Run Embedding")
+                    repartition_button = st.button("Repartition images by cluster", key="repartition_btn")
                 
-            with st.expander("Cluster", expanded=False):
-                n_clusters = st.slider("Number of clusters", 2, 100, 5)
-                reduction_method = st.selectbox("Dimensionality Reduction", ["TSNE", "PCA"])
-                cluster_button = st.button("Run Clustering")
                 
-            # --- Repartition expander and status ---
-            repartition_status_placeholder = st.empty()  # For progress and status
-            with st.expander("Repartition Images by Cluster", expanded=False):
-                st.markdown("**Target directory for repartitioned images (will be created):**")
-                repartition_dir = st.text_input(
-                    "Directory", 
-                    value="repartitioned_output",
-                    key="repartition_dir"
-                )
-                max_workers = st.number_input(
-                    "Number of threads (higher = faster, try 8–32)", 
-                    min_value=1, 
-                    max_value=64, 
-                    value=8,
-                    step=1,
-                    key="num_threads"
-                )
-                repartition_button = st.button("Repartition images by cluster", key="repartition_btn")
+             
+            # --- Save images from specific cluster logic ---
+            if 'save_cluster_button' not in st.session_state:
+                st.session_state['save_cluster_button'] = False
+            if 'save_cluster_btn' in st.session_state and st.session_state['save_cluster_btn']:
+                st.session_state['save_cluster_button'] = True
+            if 'save_cluster_button' in st.session_state and st.session_state['save_cluster_button']:
+                df_plot = st.session_state.get("data", None)
+                if df_plot is not None:
+                    selected_clusters = st.session_state.get("save_cluster_select", [])
+                    save_dir = st.session_state.get("save_cluster_dir", "cluster_selected_output")
+                    if selected_clusters:
+                        cluster_rows = df_plot[df_plot['cluster'].isin(selected_clusters)]
+                        os.makedirs(save_dir, exist_ok=True)
+                        save_rows = []
+                        progress_bar = save_status_placeholder.progress(0, text="Copying images...")
+                        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+                            futures = [
+                                executor.submit(copy_image, row, save_dir)
+                                for idx, row in cluster_rows.iterrows()
+                            ]
+                            total_files = len(futures)
+                            for i, future in enumerate(concurrent.futures.as_completed(futures), 1):
+                                result = future.result()
+                                if result is not None:
+                                    save_rows.append(result)
+                                if i % 50 == 0 or i == total_files:
+                                    progress_bar.progress(i / total_files, text=f"Copied {i} / {total_files} images")
+                        save_summary_df = pd.DataFrame(save_rows)
+                        csv_path = os.path.join(save_dir, "saved_cluster_summary.csv")
+                        save_summary_df.to_csv(csv_path, index=False)
+                        save_status_placeholder.success(
+                            f"Images from cluster(s) {', '.join(map(str, selected_clusters))} saved in {save_dir}. Summary CSV at {csv_path}"
+                        )
+                        #st.dataframe(save_summary_df.head(10), use_container_width=True)
+                    else:
+                        save_status_placeholder.warning("Please select at least one cluster.")
+                st.session_state['save_cluster_button'] = False
             
             # --- Repartitioning logic OUTSIDE the expander ---
             if repartition_button:
@@ -103,7 +167,7 @@ def main():
                     repartition_status_placeholder.success(
                         f"Repartition complete! Images organized in {repartition_dir}. Summary CSV at {csv_path}"
                     )
-                    st.dataframe(repartition_summary_df.head(10), use_container_width=True)
+                    #st.dataframe(repartition_summary_df.head(10), use_container_width=True)
 
         # -------- Embedding Step --------
         if embed_button and image_dir and os.path.isdir(image_dir):
