@@ -55,7 +55,7 @@ def main():
                     
                 with st.expander("Cluster", expanded=False):
                     n_clusters = st.slider("Number of clusters", 2, 100, 5)
-                    reduction_method = st.selectbox("Dimensionality Reduction", ["TSNE", "PCA"])
+                    reduction_method = st.selectbox("Dimensionality Reduction", ["TSNE", "PCA", "UMAP"])
                     cluster_button = st.button("Run Clustering")
             
             with tab_save:
