@@ -1,6 +1,8 @@
 import streamlit as st
 import torch
 import numpy as np
+import clip
+import open_clip
 import os
 import pandas as pd
 import altair as alt
@@ -11,9 +13,14 @@ from utils.clustering import run_kmeans, reduce_dim
 from utils.dataset import ImageFolderDataset
 
 @st.cache_resource(show_spinner=True)
-def load_clip_model(device):
-    import clip
-    model, preprocess = clip.load("ViT-B/32", device=device)
+def load_clip_model(name, device):
+    if name == "CLIP ViT-B/32":
+        model, preprocess = clip.load("ViT-B/32", device=device)
+    elif name == "BioCLIP-2":
+        model, _, preprocess = open_clip.create_model_and_transforms(
+            "hf-hub:imageomics/bioclip-2", device=device
+        )
+    model = torch.compile(model.to(device))
     return model, preprocess
 
 
@@ -32,7 +39,7 @@ def main():
             with tab_compute:
                 with st.expander("Embed", expanded=True):
                     image_dir = st.text_input("Image folder path")
-                    model_name = st.selectbox("Model", ["CLIP ViT-B/32"])
+                    model_name = st.selectbox("Model", ["CLIP ViT-B/32", "BioCLIP-2"])
                     #device = st.selectbox("Device", ["cuda", "cpu"])
                     col1, col2 = st.columns(2)
                     with col1:
@@ -176,7 +183,7 @@ def main():
             st.write(f"Found {len(image_paths)} images.")
 
             torch_device = "cuda" if torch.cuda.is_available() else "cpu"
-            model, preprocess = load_clip_model(torch_device)
+            model, preprocess = load_clip_model(model_name, torch_device)
             
             # Create dataset & DataLoader
             dataset = ImageFolderDataset(image_dir, transform=preprocess)

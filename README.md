@@ -10,9 +10,9 @@
 ## Features
 
 * **Batch Image Embedding:**
-  Efficiently embed large collections of images using the pretrained model (e.g., CLIP) on CPU or GPU (preferably), with customizable batch size and parallelism.
+  Efficiently embed large collections of images using the pretrained model (e.g., CLIP, BioCLIP) on CPU or GPU (preferably), with customizable batch size and parallelism.
 * **Clustering:**
-  Reduces embedding vectors to 2D using PCA or T-SNE. Performs K-Means clustering and display result using a scatter plot. Explore clusters via interactive scatter plots. Click on data points to preview images and details.
+  Reduces embedding vectors to 2D using PCA, T-SNE, and UMAP. Performs K-Means clustering and display result using a scatter plot. Explore clusters via interactive scatter plots. Click on data points to preview images and details.
 * **Cluster-Based Repartitioning:**
   Copy/repartition images into cluster-specific folders with a single click. Generates a summary CSV for downstream use.
 * **Clustering Summary:**
