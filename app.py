@@ -12,20 +12,59 @@ from utils.io import list_image_files, copy_image
 from utils.clustering import run_kmeans, reduce_dim
 from utils.dataset import ImageFolderDataset
 
+@st.cache_data
+def load_available_models():
+    """Load available models from CSV file."""
+    try:
+        df = pd.read_csv("data/available_models.csv")
+        return df
+    except FileNotFoundError:
+        st.error("Available models CSV file not found. Please ensure data/available_models.csv exists.")
+        return pd.DataFrame(columns=["name", "pretrained"])
+
+@st.cache_data
+def get_model_options():
+    """Get formatted model options for selectbox."""
+    df = load_available_models()
+    options = []
+    
+    # Add all models from CSV
+    for _, row in df.iterrows():
+        name = row['name']
+        pretrained = row['pretrained']
+            
+        if pd.isna(pretrained) or pretrained == "":
+            display_name = name
+        else:
+            display_name = f"{name} ({pretrained})"
+        options.append(display_name)
+    
+    return options
+
+def parse_model_selection(selected_model):
+    """Parse the selected model string to extract model name and pretrained."""
+    # Parse OpenCLIP format: "model_name (pretrained)" or just "model_name"
+    if "(" in selected_model and selected_model.endswith(")"):
+        name = selected_model.split(" (")[0]
+        pretrained = selected_model.split(" (")[1].rstrip(")")
+        return name, pretrained
+    else:
+        return selected_model, None
+
 @st.cache_resource(show_spinner=True)
-def load_clip_model(name, device):
-    if name == "CLIP ViT-B/32":
-        model, preprocess = clip.load("ViT-B/32", device=device)
-    elif name == "CLIP ViT-L/14@336px":
-        model, preprocess = clip.load("ViT-L/14@336px", device=device)
-    elif name == "BioCLIP-2":
-        model, _, preprocess = open_clip.create_model_and_transforms(
-            "hf-hub:imageomics/bioclip-2", device=device
-        )
+def load_model_unified(selected_model, device="cuda"):
+    """Unified model loading function that handles all model types."""
+    model_name, pretrained = parse_model_selection(selected_model)
+    
+    model, _, preprocess = open_clip.create_model_and_transforms(
+        model_name, pretrained=pretrained, device=device
+    )
+    
     model = torch.compile(model.to(device))
     return model, preprocess
 
 
+    
 @torch.no_grad()
 def main():
     st.set_page_config(
@@ -41,7 +80,11 @@ def main():
             with tab_compute:
                 with st.expander("Embed", expanded=True):
                     image_dir = st.text_input("Image folder path")
-                    model_name = st.selectbox("Model", ["CLIP ViT-B/32", "CLIP ViT-L/14@336px", "BioCLIP-2"])
+                    
+                    # Get available models dynamically
+                    available_models = get_model_options()
+                    model_name = st.selectbox("Model", available_models)
+                    
                     #device = st.selectbox("Device", ["cuda", "cpu"])
                     col1, col2 = st.columns(2)
                     with col1:
@@ -185,7 +228,7 @@ def main():
             st.write(f"Found {len(image_paths)} images.")
 
             torch_device = "cuda" if torch.cuda.is_available() else "cpu"
-            model, preprocess = load_clip_model(model_name, torch_device)
+            model, preprocess = load_model_unified(model_name, torch_device)
             
             # Create dataset & DataLoader
             dataset = ImageFolderDataset(image_dir, transform=preprocess)
