@@ -10,7 +10,7 @@
 ## Features
 
 * **Batch Image Embedding:**
-  Efficiently embed large collections of images using the pretrained model (e.g., CLIP, BioCLIP) on CPU or GPU (preferably), with customizable batch size and parallelism. Check all available at [`data/available_models.csv`](data/available_models.csv).
+  Efficiently embed large collections of images using the pretrained model (e.g., CLIP, BioCLIP) on CPU or GPU (preferably), with customizable batch size and parallelism. 
 * **Clustering:**
   Reduces embedding vectors to 2D using PCA, T-SNE, and UMAP. Performs K-Means clustering and display result using a scatter plot. Explore clusters via interactive scatter plots. Click on data points to preview images and details.
 * **Cluster-Based Repartitioning:**
@@ -20,20 +20,121 @@
 
 ## Installation
 
-Create a virtual environment with `uv` and install dependencies: 
+### Option 1: Using uv (Recommended)
+
+[uv](https://docs.astral.sh/uv/) is a fast Python package installer and resolver. Install `uv` first if you haven't already:
+
 ```bash
-uv venv .venv
-source .venv/bin/activate
-uv pip install -r requirements.txt
+# Install uv (if not already installed)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+Then install the project:
+
+```bash
+# Clone the repository
+git clone https://github.com/Imageomics/emb-explorer.git
+cd emb-explorer
+
+# Create virtual environment and install dependencies
+uv venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+uv pip install -e .
+```
+
+### Option 2: Using pip
+
+```bash
+# Clone the repository
+git clone https://github.com/Imageomics/emb-explorer.git
+cd emb-explorer
+
+# Create virtual environment
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install dependencies
+pip install -e .
+```
+
+### Option 3: From requirements.txt (Legacy)
+
+```bash
+# Create virtual environment
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install from requirements.txt
+pip install -r requirements.txt
+```
+
+### GPU Support (Optional)
+
+For GPU acceleration with CUDA, install the additional GPU dependencies:
+
+```bash
+# With uv
+uv pip install -e ".[gpu]"
+
+# With pip
+pip install -e ".[gpu]"
 ```
 
 ## Usage
 
+### Running the Application
+
 ```bash
-# Activate virtual environment
-source .venv/bin/activate 
-# Host app
+# Activate virtual environment (if not already activated)
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Run the Streamlit app
 streamlit run app.py
+```
+
+### Command Line Tools
+
+The project also provides command-line utilities:
+
+```bash
+# List all available models
+python list_models.py --format table
+
+# List models in JSON format
+python list_models.py --format json --pretty
+
+# List models as names only
+python list_models.py --format names
+
+# Get help for the list models command
+python list_models.py --help
+```
+
+### Quick Setup Script
+
+For convenience, you can use the provided setup script:
+
+```bash
+# Make script executable and run
+chmod +x setup.sh
+
+# Install dependencies and run the app
+./setup.sh
+
+# Or run specific commands
+./setup.sh install  # Just install dependencies
+./setup.sh models   # List available models
+./setup.sh run      # Just run the app
+./setup.sh help     # Show help
+```
+
+### Development Testing
+
+To test your installation:
+
+```bash
+# Run development tests
+python test_installation.py
 ```
 
 ### Running on Remote Compute Nodes
