@@ -11,29 +11,20 @@ import concurrent.futures
 from utils.io import list_image_files, copy_image
 from utils.clustering import run_kmeans, reduce_dim
 from utils.dataset import ImageFolderDataset
-
-@st.cache_data
-def load_available_models():
-    """Load available models from CSV file."""
-    try:
-        df = pd.read_csv("data/available_models.csv")
-        return df
-    except FileNotFoundError:
-        st.error("Available models CSV file not found. Please ensure data/available_models.csv exists.")
-        return pd.DataFrame(columns=["name", "pretrained"])
+from utils.models import list_available_models
 
 @st.cache_data
 def get_model_options():
     """Get formatted model options for selectbox."""
-    df = load_available_models()
+    models_data = list_available_models()
     options = []
     
-    # Add all models from CSV
-    for _, row in df.iterrows():
-        name = row['name']
-        pretrained = row['pretrained']
+    # Add all models from list
+    for model in models_data:
+        name = model['name']
+        pretrained = model['pretrained']
             
-        if pd.isna(pretrained) or pretrained == "":
+        if pretrained is None or pretrained == "":
             display_name = name
         else:
             display_name = f"{name} ({pretrained})"
