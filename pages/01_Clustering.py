@@ -18,6 +18,16 @@ def main():
         page_icon="🔍"
     )
     
+    # Clear precalculated embeddings data to prevent carry-over
+    if "page_type" not in st.session_state or st.session_state.page_type != "clustering":
+        # Clear precalculated data
+        precalc_keys = ["parquet_df", "parquet_file_path", "column_info", "filtered_df", 
+                       "current_filters", "filtered_df_for_clustering"]
+        for key in precalc_keys:
+            if key in st.session_state:
+                del st.session_state[key]
+        st.session_state.page_type = "clustering"
+    
     st.title("🔍 Image Clustering")
     
     # Create the main layout

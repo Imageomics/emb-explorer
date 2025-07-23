@@ -10,6 +10,7 @@ from services.embedding_service import EmbeddingService
 from services.clustering_service import ClusteringService
 from services.file_service import FileService
 from lib.progress import StreamlitProgressContext
+from components.shared.clustering_controls import render_clustering_backend_controls, render_basic_clustering_controls
 
 
 def render_embedding_section() -> Tuple[bool, Optional[str], Optional[str], int, int]:
@@ -81,17 +82,24 @@ def render_embedding_section() -> Tuple[bool, Optional[str], Optional[str], int,
     return embed_button, image_dir, model_name, n_workers, batch_size
 
 
-def render_clustering_section() -> Tuple[bool, int, str]:
+def render_clustering_section(n_workers: int = 1) -> Tuple[bool, int, str]:
     """
     Render the clustering section of the sidebar.
+    
+    Args:
+        n_workers: Number of workers for parallel processing
     
     Returns:
         Tuple of (cluster_button_clicked, n_clusters, reduction_method)
     """
     with st.expander("Cluster", expanded=False):
-        n_clusters = st.slider("Number of clusters", 2, 100, 5)
-        reduction_method = st.selectbox("Dimensionality Reduction", ["TSNE", "PCA", "UMAP"])
-        cluster_button = st.button("Run Clustering")
+        # Basic clustering controls
+        n_clusters, reduction_method = render_basic_clustering_controls()
+        
+        # Backend and advanced controls
+        dim_reduction_backend, clustering_backend, n_workers_clustering, seed = render_clustering_backend_controls()
+        
+        cluster_button = st.button("Run Clustering", type="primary")
         
         # Handle clustering execution
         if cluster_button:
@@ -102,7 +110,8 @@ def render_clustering_section() -> Tuple[bool, int, str]:
                 try:
                     with st.spinner("Running clustering..."):
                         df_plot, labels = ClusteringService.run_clustering(
-                            embeddings, valid_paths, n_clusters, reduction_method
+                            embeddings, valid_paths, n_clusters, reduction_method, n_workers_clustering, 
+                            dim_reduction_backend, clustering_backend, seed
                         )
                     
                     # Store everything in session state for reruns
@@ -212,7 +221,7 @@ def render_clustering_sidebar():
     
     with tab_compute:
         embed_button, image_dir, model_name, n_workers, batch_size = render_embedding_section()
-        cluster_button, n_clusters, reduction_method = render_clustering_section()
+        cluster_button, n_clusters, reduction_method = render_clustering_section(n_workers)
     
     with tab_save:
         render_save_section()

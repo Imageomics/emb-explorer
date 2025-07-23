@@ -16,6 +16,26 @@ def render_scatter_plot():
 
     if df_plot is not None and len(df_plot) > 1:
         point_selector = alt.selection_point(fields=["idx"], name="point_selection")
+        
+        # Determine tooltip fields based on available columns
+        tooltip_fields = ['cluster']
+        
+        # Add metadata fields if available (for precalculated embeddings)
+        metadata_fields = ['scientific_name', 'common_name', 'family', 'genus', 'species', 'uuid']
+        for field in metadata_fields:
+            if field in df_plot.columns:
+                tooltip_fields.append(field)
+        
+        # Add file_name if available (for image clustering)
+        if 'file_name' in df_plot.columns:
+            tooltip_fields.append('file_name')
+        
+        # Determine title based on data type
+        if 'uuid' in df_plot.columns:
+            title = "Embedding Clusters (click a point to view details)"
+        else:
+            title = "Image Clusters (click a point to preview image)"
+        
         scatter = (
             alt.Chart(df_plot)
             .mark_circle(size=60)
@@ -23,14 +43,14 @@ def render_scatter_plot():
                 x=alt.X('x', scale=alt.Scale(zero=False)),
                 y=alt.Y('y', scale=alt.Scale(zero=False)),
                 color=alt.Color('cluster:N', legend=alt.Legend(title="Cluster")),
-                tooltip=['file_name', 'cluster'],
+                tooltip=tooltip_fields,
                 fillOpacity=alt.condition(point_selector, alt.value(1), alt.value(0.3))
             )
             .add_params(point_selector)
             .properties(
                 width=800,
                 height=700,
-                title="Image Clusters (click a point to preview image)"
+                title=title
             )
         )
         event = st.altair_chart(scatter, key="alt_chart", on_select="rerun", use_container_width=True)

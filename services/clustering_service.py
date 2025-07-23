@@ -19,7 +19,10 @@ class ClusteringService:
         valid_paths: List[str],
         n_clusters: int,
         reduction_method: str,
-        n_workers: int = 1
+        n_workers: int = 1,
+        dim_reduction_backend: str = "auto",
+        clustering_backend: str = "auto",
+        seed: int = None
     ) -> Tuple[pd.DataFrame, np.ndarray]:
         """
         Run clustering on embeddings.
@@ -30,12 +33,27 @@ class ClusteringService:
             n_clusters: Number of clusters
             reduction_method: Dimensionality reduction method
             n_workers: Number of workers for reduction
+            dim_reduction_backend: Backend for dimensionality reduction ("auto", "sklearn", "faiss", "cuml")
+            clustering_backend: Backend for clustering ("auto", "sklearn", "faiss", "cuml")
+            seed: Random seed for reproducibility (None for random)
             
         Returns:
             Tuple of (cluster dataframe, cluster labels)
         """
-        reduced = reduce_dim(embeddings, reduction_method, n_workers=n_workers)
-        kmeans, labels = run_kmeans(reduced, int(n_clusters))
+        reduced = reduce_dim(
+            embeddings, 
+            reduction_method, 
+            seed=seed,
+            n_workers=n_workers, 
+            backend=dim_reduction_backend
+        )
+        kmeans, labels = run_kmeans(
+            reduced, 
+            int(n_clusters), 
+            seed=seed,
+            n_workers=n_workers, 
+            backend=clustering_backend
+        )
         
         df_plot = pd.DataFrame({
             "x": reduced[:, 0],

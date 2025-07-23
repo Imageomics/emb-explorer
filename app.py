@@ -15,17 +15,26 @@ def main():
     
     ## 🚀 Getting Started
     
-    Navigate to the **🔍 Clustering** page in the sidebar to:
+    Choose from two main workflows:
+    
+    ### 🔍 Clustering Page
     - Generate embeddings for your image datasets
     - Run clustering analysis with different algorithms  
     - Visualize clusters in interactive plots
     - Save and repartition images by cluster
     
+    ### 📊 Precalculated Embeddings Page
+    - Load parquet files with precomputed embeddings and metadata
+    - Filter data based on taxonomic and source metadata
+    - Cluster and visualize filtered embeddings
+    - Explore biological/taxonomic patterns in your data
+    
     ## 📊 Features
     
     - **Multiple Models**: Support for CLIP, BioCLIP, and OpenCLIP models
     - **Flexible Clustering**: PCA, t-SNE, and UMAP dimensionality reduction
-    - **Interactive Visualization**: Click on points to preview images
+    - **Interactive Visualization**: Click on points to preview images or view metadata
+    - **Metadata Filtering**: Filter by taxonomic hierarchy, source datasets, and more
     - **Batch Operations**: Save specific clusters or repartition all images
     - **Progress Tracking**: Real-time progress bars for long operations
     
