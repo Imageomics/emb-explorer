@@ -44,6 +44,7 @@ dependencies = [
     "open-clip-torch>=2.20.0",
     "clip @ git+https://github.com/openai/CLIP.git",
     "matplotlib>=3.5.0",
+    "hpc-inference @ git+https://github.com/Imageomics/hpc-inference.git"
 ]
 
 [project.optional-dependencies]
