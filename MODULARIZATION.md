@@ -7,17 +7,17 @@ emb-explorer/
 ├── app.py                           # Main entry point (welcome page)
 ├── pages/                           # Streamlit pages
 │   └── 01_Clustering.py            # Clustering functionality page
-├── ui/                             # UI components
-│   ├── clustering/                 # Clustering page UI components
-│   │   ├── sidebar.py             # Sidebar controls
-│   │   ├── visualization.py       # Scatter plot and image preview
-│   │   └── summary.py             # Clustering summary panel
-│   └── shared/                    # Shared UI utilities
-│       └── progress.py            # Progress bar context managers
-├── server/                        # Business logic services
+├── components/                      # UI components
+│   └── clustering/                 # Clustering page UI components
+│       ├── sidebar.py             # Sidebar controls
+│       ├── visualization.py       # Scatter plot and image preview
+│       └── summary.py             # Clustering summary panel
+├── services/                       # Business logic services
 │   ├── embedding_service.py      # Embedding generation
 │   ├── clustering_service.py     # Clustering operations
 │   └── file_service.py           # File save/repartition operations
+├── lib/                           # Infrastructure utilities
+│   └── progress.py               # Progress bar context managers
 └── utils/                         # Low-level utilities (existing)
     ├── models.py
     ├── clustering.py
@@ -26,11 +26,12 @@ emb-explorer/
 
 ## 🎯 Key Benefits
 
-1. **Clean Separation**: UI components handle presentation, server services handle business logic
+1. **Clean Separation**: UI components handle presentation, service layer handles business logic
 2. **Progress Bars Preserved**: Context managers ensure progress bars work exactly as before
 3. **Modular Design**: Each component has a single responsibility
 4. **Future Ready**: Easy to add new pages and features
-5. **Testable**: Server logic can be tested independently
+5. **Testable**: Service logic can be tested independently
+6. **Clear Structure**: `utils/` for algorithms, `services/` for business logic, `components/` for UI, `lib/` for infrastructure
 
 ## 🚀 How to Run
 
@@ -45,18 +46,18 @@ streamlit run app.py
 
 ## 🔧 Key Components
 
-### Progress Management (`ui/shared/progress.py`)
+### Progress Management (`lib/progress.py`)
 - `StreamlitProgressContext`: Automatic progress bar cleanup with success/error handling
 - `MockProgressContext`: For testing without UI
 
-### Server Services
+### Service Layer
 - `EmbeddingService`: Handles model loading and embedding generation
 - `ClusteringService`: Manages clustering workflows and summary generation  
 - `FileService`: Handles save and repartition operations
 
 ### UI Components
-- Page-specific components in `ui/clustering/`
-- Shared utilities in `ui/shared/`
+- Page-specific components in `components/clustering/`
+- Infrastructure utilities in `lib/`
 - Clean separation between UI and business logic
 
 ## 🧪 Testing the Migration
@@ -71,8 +72,9 @@ streamlit run app.py
 To add a new page:
 
 1. Create `pages/02_NewPage.py`
-2. Create UI components in `ui/newpage/`
-3. Add server services if needed
-4. Follow the same UI/Server pattern
+2. Create UI components in `components/newpage/`
+3. Add services if needed in `services/`
+4. Add infrastructure utilities in `lib/` if needed
+5. Follow the same components/services pattern
 
 The modular structure makes it easy to reuse components and maintain consistency across pages.

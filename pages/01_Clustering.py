@@ -3,9 +3,11 @@ Clustering page for the embedding explorer.
 """
 
 import streamlit as st
-from ui.clustering.sidebar import render_clustering_sidebar
-from ui.clustering.visualization import render_scatter_plot, render_image_preview
-from ui.clustering.summary import render_clustering_summary
+import os
+
+from components.clustering.sidebar import render_clustering_sidebar
+from components.clustering.visualization import render_scatter_plot, render_image_preview
+from components.clustering.summary import render_clustering_summary
 
 
 def main():
