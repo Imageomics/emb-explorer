@@ -5,7 +5,12 @@ Works with parquet files containing precomputed embeddings and metadata.
 
 import streamlit as st
 
-from components.precalculated.sidebar import render_precalculated_sidebar
+from components.precalculated.sidebar import (
+    render_precalculated_sidebar,
+    render_file_section,
+    render_filter_section,
+    render_clustering_section
+)
 from components.clustering.visualization import render_scatter_plot
 from components.precalculated.data_preview import render_data_preview
 from components.clustering.summary import render_clustering_summary
@@ -31,15 +36,21 @@ def main():
     st.title("📊 Precalculated Embeddings")
     st.markdown("Load and cluster precomputed embeddings from parquet files with metadata filtering.")
     
-    # Create the main layout
-    col_settings, col_plot, col_preview = st.columns([2, 6, 3])
+    # Row 1: Load Parquet File section
+    file_loaded, file_path = render_file_section()
+    
+    # Row 2: Filter Data section  
+    filters = render_filter_section()
+    
+    # Row 3: Main content layout with clustering controls, plot, and preview
+    col_settings, col_plot, col_preview = st.columns([2, 7, 3])
     
     with col_settings:
-        # Render the sidebar with all controls
-        sidebar_state = render_precalculated_sidebar()
+        # Render only the clustering section in the sidebar
+        cluster_button, n_clusters, reduction_method, dim_reduction_backend, clustering_backend, n_workers, seed = render_clustering_section()
     
     with col_plot:
-        # Render the main scatter plot (reused from clustering page)
+        # Render the main scatter plot
         render_scatter_plot()
     
     with col_preview:

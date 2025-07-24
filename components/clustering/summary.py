@@ -32,6 +32,7 @@ def render_taxonomic_tree_summary():
                 "Display taxonomy for:",
                 options=cluster_options,
                 index=0,
+                key="taxonomy_cluster_selector",
                 help="Select a specific cluster to show its taxonomy tree, or 'All' to show the entire dataset"
             )
         
@@ -42,6 +43,7 @@ def render_taxonomic_tree_summary():
                 max_value=1000,
                 value=5,
                 step=1,
+                key="taxonomy_min_count",
                 help="Minimum number of records for a taxon to appear in the tree"
             )
         
@@ -51,41 +53,64 @@ def render_taxonomic_tree_summary():
                 min_value=1,
                 max_value=7,
                 value=7,
+                key="taxonomy_tree_depth",
                 help="Maximum depth of the taxonomy tree to display"
             )
         
-        # Filter data based on selected cluster
-        if selected_cluster != "All" and selected_cluster.startswith("Cluster "):
-            cluster_id = selected_cluster.replace("Cluster ", "")
-            cluster_mask = df_plot['cluster'] == cluster_id
-            cluster_uuids = df_plot[cluster_mask]['uuid'].tolist()
-            tree_df = filtered_df[filtered_df['uuid'].isin(cluster_uuids)]
-            display_title = f"Taxonomic Tree for {selected_cluster}"
-        else:
-            tree_df = filtered_df
-            display_title = "Taxonomic Tree for All Clusters"
+        # Create a stable cache key based on the data hash and filter parameters
+        # Use a hash of the filtered_df UUID column to detect data changes
+        data_hash = hash(tuple(filtered_df['uuid'].iloc[:min(1000, len(filtered_df))]))  # Sample first 1000 for performance
+        cache_key = f"taxonomy_{data_hash}_{selected_cluster}_{min_count}_{tree_depth}"
         
-        # Build taxonomic tree for the selected data
-        tree = build_taxonomic_tree(tree_df)
-        stats = get_tree_statistics(tree)
+        # Check if we have cached results and they're still valid
+        if (cache_key not in st.session_state or 
+            st.session_state.get("taxonomy_cache_key") != cache_key):
+            
+            # Data or parameters changed, regenerate taxonomy tree
+            with st.spinner("Building taxonomy tree..."):
+                # Filter data based on selected cluster
+                if selected_cluster != "All" and selected_cluster.startswith("Cluster "):
+                    cluster_id = selected_cluster.replace("Cluster ", "")
+                    cluster_mask = df_plot['cluster'] == cluster_id
+                    cluster_uuids = df_plot[cluster_mask]['uuid'].tolist()
+                    tree_df = filtered_df[filtered_df['uuid'].isin(cluster_uuids)]
+                    display_title = f"Taxonomic Tree for {selected_cluster}"
+                else:
+                    tree_df = filtered_df
+                    display_title = "Taxonomic Tree for All Clusters"
+                
+                # Build taxonomic tree for the selected data (only when needed)
+                tree = build_taxonomic_tree(tree_df)
+                stats = get_tree_statistics(tree)
+                tree_string = format_tree_string(tree, max_depth=tree_depth, min_count=min_count)
+                
+                # Cache the results
+                st.session_state[cache_key] = {
+                    'tree': tree,
+                    'stats': stats,
+                    'tree_string': tree_string,
+                    'display_title': display_title
+                }
+                st.session_state["taxonomy_cache_key"] = cache_key
+        
+        # Use cached results (no regeneration)
+        cached_data = st.session_state[cache_key]
         
         # Show statistics
-        st.markdown(f"**{display_title}**")
+        st.markdown(f"**{cached_data['display_title']}**")
         col1, col2, col3, col4 = st.columns(4)
         with col1:
-            st.metric("Total Records", f"{stats['total_records']:,}")
+            st.metric("Total Records", f"{cached_data['stats']['total_records']:,}")
         with col2:
-            st.metric("Kingdoms", stats['kingdoms'])
+            st.metric("Kingdoms", cached_data['stats']['kingdoms'])
         with col3:
-            st.metric("Families", stats['families'])
+            st.metric("Families", cached_data['stats']['families'])
         with col4:
-            st.metric("Species", stats['species'])
+            st.metric("Species", cached_data['stats']['species'])
         
         # Display the tree
-        tree_string = format_tree_string(tree, max_depth=tree_depth, min_count=min_count)
-        
-        if tree_string:
-            st.code(tree_string, language="text")
+        if cached_data['tree_string']:
+            st.code(cached_data['tree_string'], language="text")
         else:
             st.info("No taxonomic data meets the display criteria. Try lowering the minimum count.")
 
