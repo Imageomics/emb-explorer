@@ -3,6 +3,7 @@ Sidebar components for the precalculated embeddings page.
 """
 
 import streamlit as st
+import pandas as pd
 import os
 from typing import Dict, Any, Optional, Tuple
 
@@ -312,6 +313,48 @@ def render_clustering_section() -> Tuple[bool, int, str, str, str, int, Optional
                         df_plot[['x', 'y']].values, 
                         labels
                     )
+                    
+                    # If using taxonomic clustering, enhance cluster names while preserving color mapping
+                    if cluster_method == "Use taxonomic rank" and selected_rank in filtered_df.columns:
+                        # Create mapping from cluster numbers to taxonomic names
+                        filtered_df_reset = filtered_df.reset_index(drop=True)
+                        
+                        # Get unique taxonomic values and create consistent mapping
+                        unique_taxa = sorted(filtered_df[selected_rank].dropna().unique())
+                        taxon_to_cluster_id = {taxon: str(i) for i, taxon in enumerate(unique_taxa)}
+                        
+                        # Create taxonomic cluster names while keeping numeric IDs for coloring
+                        taxonomic_names = []
+                        numeric_clusters = []
+                        
+                        for idx in range(len(df_plot)):
+                            taxon_value = filtered_df_reset.iloc[idx][selected_rank]
+                            if pd.notna(taxon_value) and taxon_value in taxon_to_cluster_id:
+                                # Use the taxonomic name as display name
+                                taxonomic_names.append(taxon_value)
+                                # Keep numeric ID for consistent coloring
+                                numeric_clusters.append(taxon_to_cluster_id[taxon_value])
+                            else:
+                                # Handle missing values
+                                unknown_name = f"Unknown {selected_rank}"
+                                taxonomic_names.append(unknown_name)
+                                # Assign a high numeric ID for unknowns
+                                numeric_clusters.append(str(len(unique_taxa)))
+                        
+                        # Store both versions: display names and numeric IDs
+                        df_plot['cluster'] = numeric_clusters  # Keep numeric for consistent coloring
+                        df_plot['cluster_name'] = taxonomic_names  # Add taxonomic names for display
+                        
+                        # Store taxonomic clustering metadata
+                        st.session_state.taxonomic_clustering = {
+                            'is_taxonomic': True,
+                            'rank': selected_rank,
+                            'taxon_to_id': taxon_to_cluster_id
+                        }
+                    else:
+                        # Standard numeric clustering - use cluster IDs as names too
+                        df_plot['cluster_name'] = df_plot['cluster'].copy()
+                        st.session_state.taxonomic_clustering = {'is_taxonomic': False}
                 
                 # Store results
                 st.session_state.data = df_plot

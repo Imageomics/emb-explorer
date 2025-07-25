@@ -25,8 +25,18 @@ def render_taxonomic_tree_summary():
             # Get available clusters
             cluster_options = ["All"]
             if "cluster" in df_plot.columns:
-                unique_clusters = sorted(df_plot["cluster"].unique(), key=lambda x: int(x))
-                cluster_options.extend([f"Cluster {c}" for c in unique_clusters])
+                # Check if we have taxonomic clustering with cluster names
+                taxonomic_info = st.session_state.get("taxonomic_clustering", {})
+                is_taxonomic = taxonomic_info.get('is_taxonomic', False)
+                
+                if is_taxonomic and 'cluster_name' in df_plot.columns:
+                    # Use taxonomic names for display
+                    unique_cluster_names = sorted(df_plot["cluster_name"].unique())
+                    cluster_options.extend(unique_cluster_names)
+                else:
+                    # Standard numeric clustering
+                    unique_clusters = sorted(df_plot["cluster"].unique(), key=lambda x: int(x))
+                    cluster_options.extend([f"Cluster {c}" for c in unique_clusters])
             
             selected_cluster = st.selectbox(
                 "Display taxonomy for:",
@@ -69,12 +79,29 @@ def render_taxonomic_tree_summary():
             # Data or parameters changed, regenerate taxonomy tree
             with st.spinner("Building taxonomy tree..."):
                 # Filter data based on selected cluster
-                if selected_cluster != "All" and selected_cluster.startswith("Cluster "):
-                    cluster_id = selected_cluster.replace("Cluster ", "")
-                    cluster_mask = df_plot['cluster'] == cluster_id
-                    cluster_uuids = df_plot[cluster_mask]['uuid'].tolist()
-                    tree_df = filtered_df[filtered_df['uuid'].isin(cluster_uuids)]
-                    display_title = f"Taxonomic Tree for {selected_cluster}"
+                if selected_cluster != "All":
+                    taxonomic_info = st.session_state.get("taxonomic_clustering", {})
+                    is_taxonomic = taxonomic_info.get('is_taxonomic', False)
+                    
+                    if is_taxonomic and 'cluster_name' in df_plot.columns:
+                        # For taxonomic clustering, filter by cluster_name
+                        cluster_mask = df_plot['cluster_name'] == selected_cluster
+                        cluster_uuids = df_plot[cluster_mask]['uuid'].tolist()
+                        tree_df = filtered_df[filtered_df['uuid'].isin(cluster_uuids)]
+                        display_title = f"Taxonomic Tree for {selected_cluster}"
+                    elif selected_cluster.startswith("Cluster "):
+                        # For numeric clustering, extract cluster ID
+                        cluster_id = selected_cluster.replace("Cluster ", "")
+                        cluster_mask = df_plot['cluster'] == cluster_id
+                        cluster_uuids = df_plot[cluster_mask]['uuid'].tolist()
+                        tree_df = filtered_df[filtered_df['uuid'].isin(cluster_uuids)]
+                        display_title = f"Taxonomic Tree for {selected_cluster}"
+                    else:
+                        # Fallback: treat as direct cluster name
+                        cluster_mask = df_plot['cluster_name'] == selected_cluster if 'cluster_name' in df_plot.columns else df_plot['cluster'] == selected_cluster
+                        cluster_uuids = df_plot[cluster_mask]['uuid'].tolist()
+                        tree_df = filtered_df[filtered_df['uuid'].isin(cluster_uuids)]
+                        display_title = f"Taxonomic Tree for {selected_cluster}"
                 else:
                     tree_df = filtered_df
                     display_title = "Taxonomic Tree for All Clusters"

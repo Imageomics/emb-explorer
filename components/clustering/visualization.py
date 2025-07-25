@@ -18,7 +18,17 @@ def render_scatter_plot():
         point_selector = alt.selection_point(fields=["idx"], name="point_selection")
         
         # Determine tooltip fields based on available columns
-        tooltip_fields = ['cluster']
+        tooltip_fields = []
+        
+        # Use cluster_name for display if available (taxonomic clustering), otherwise use cluster
+        if 'cluster_name' in df_plot.columns:
+            tooltip_fields.append('cluster_name:N')
+            cluster_legend_field = 'cluster_name:N'
+            cluster_legend_title = "Cluster"
+        else:
+            tooltip_fields.append('cluster:N')
+            cluster_legend_field = 'cluster:N'
+            cluster_legend_title = "Cluster"
         
         # Add metadata fields if available (for precalculated embeddings)
         metadata_fields = ['scientific_name', 'common_name', 'family', 'genus', 'species', 'uuid']
@@ -42,7 +52,7 @@ def render_scatter_plot():
             .encode(
                 x=alt.X('x', scale=alt.Scale(zero=False)),
                 y=alt.Y('y', scale=alt.Scale(zero=False)),
-                color=alt.Color('cluster:N', legend=alt.Legend(title="Cluster")),
+                color=alt.Color('cluster:N', legend=alt.Legend(title=cluster_legend_title)),
                 tooltip=tooltip_fields,
                 fillOpacity=alt.condition(point_selector, alt.value(1), alt.value(0.3))
             )

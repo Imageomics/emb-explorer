@@ -60,8 +60,15 @@ def render_data_preview():
         filtered_df is not None
     ):
         # Get the selected record
+        selected_idx = st.session_state.get("selected_image_idx", 0)
         selected_uuid = df_plot.iloc[selected_idx]['uuid']
         cluster = labels[selected_idx] if labels is not None else "?"
+        
+        # Use cluster_name if available (for taxonomic clustering)
+        if 'cluster_name' in df_plot.columns:
+            cluster_display = df_plot.iloc[selected_idx]['cluster_name']
+        else:
+            cluster_display = cluster
         
         # Find the full record in the original filtered dataframe
         record = filtered_df[filtered_df['uuid'] == selected_uuid].iloc[0]
@@ -73,7 +80,7 @@ def render_data_preview():
         
         with tab_overview:
             # Basic information
-            st.markdown(f"**Cluster:** `{cluster}`")
+            st.markdown(f"**Cluster:** `{cluster_display}`")
             st.markdown(f"**UUID:** `{selected_uuid}`")
             
             # Try to fetch and display image if identifier exists
@@ -167,16 +174,37 @@ def render_cluster_statistics():
         
         # Create cluster summary
         cluster_summary = []
-        for cluster_id in sorted(df_plot['cluster'].unique(), key=int):
-            cluster_mask = df_plot['cluster'] == cluster_id
-            cluster_size = cluster_mask.sum()
-            cluster_percentage = (cluster_size / len(df_plot)) * 100
+        
+        # Check if we have taxonomic clustering with cluster names
+        if 'cluster_name' in df_plot.columns:
+            # Use cluster names for display, but group by cluster ID for consistency
+            unique_cluster_ids = sorted(df_plot['cluster'].unique(), key=lambda x: int(x))
             
-            cluster_summary.append({
-                'Cluster': int(cluster_id),
-                'Size': cluster_size,
-                'Percentage': f"{cluster_percentage:.1f}%"
-            })
+            for cluster_id in unique_cluster_ids:
+                cluster_mask = df_plot['cluster'] == cluster_id
+                cluster_size = cluster_mask.sum()
+                cluster_percentage = (cluster_size / len(df_plot)) * 100
+                
+                # Get the cluster name for this cluster ID
+                cluster_name = df_plot[cluster_mask]['cluster_name'].iloc[0] if cluster_size > 0 else str(cluster_id)
+                
+                cluster_summary.append({
+                    'Cluster': cluster_name,
+                    'Size': cluster_size,
+                    'Percentage': f"{cluster_percentage:.1f}%"
+                })
+        else:
+            # Standard numeric clustering
+            for cluster_id in sorted(df_plot['cluster'].unique(), key=int):
+                cluster_mask = df_plot['cluster'] == cluster_id
+                cluster_size = cluster_mask.sum()
+                cluster_percentage = (cluster_size / len(df_plot)) * 100
+                
+                cluster_summary.append({
+                    'Cluster': int(cluster_id),
+                    'Size': cluster_size,
+                    'Percentage': f"{cluster_percentage:.1f}%"
+                })
         
         summary_df = pd.DataFrame(cluster_summary)
         st.dataframe(summary_df, hide_index=True, use_container_width=True)
