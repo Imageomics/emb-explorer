@@ -1,0 +1,33 @@
+{
+  "data_path": "/fs/scratch/PAS2136/TreeOfLife/embeddings/model=BioCLIP-2/demo/sample_1M",
+  "output_dir": "/users/PZS1008/netzhang/emb-explorer/output/sample_1M",
+
+  "filters": {
+    "source_dataset": [],
+    "publisher": [],
+    "basisOfRecord": [],
+    "img_type": [],
+    
+    "kingdom": ["Animalia", "Fungi"],
+    "phylum": [],
+    "class": [],
+    "order": [],
+    "family": [],
+    "genus": [],
+    "species": [],
+    "scientific_name": [],
+    "common_name": []
+  },
+
+  "cluster_spec": {
+    "model": "kmeans",
+    "n_clusters": 5,
+    "rnd_state": 42
+  },
+
+  "dim_reduction_spec": {
+    "model": "pca",
+    "n_components": 2
+  }
+
+}
