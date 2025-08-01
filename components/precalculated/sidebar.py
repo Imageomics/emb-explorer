@@ -4,6 +4,7 @@ Sidebar components for the precalculated embeddings page.
 
 import streamlit as st
 import pandas as pd
+import pyarrow as pa
 import os
 from typing import Dict, Any, Optional, Tuple
 
@@ -25,27 +26,17 @@ def render_file_section() -> Tuple[bool, Optional[str]]:
             help="Path to your parquet file containing embeddings and metadata. Large files are loaded efficiently."
         )
         
-        # Option for lazy loading with DuckDB (if available)
-        try:
-            import duckdb
-            use_lazy_loading = st.checkbox(
-                "Use lazy loading (DuckDB)", 
-                value=False,
-                help="Recommended for very large parquet files (>1GB). Requires DuckDB."
-            )
-        except ImportError:
-            use_lazy_loading = False
-            st.info("💡 Install DuckDB for lazy loading of very large files: `pip install duckdb`")
         
         load_button = st.button("Load File")
         
         if load_button and file_path and os.path.exists(file_path):
             try:
                 with st.spinner("Loading parquet file..."):
-                    df = ParquetService.load_parquet_file(file_path)
+                    # Use the efficient PyArrow loader
+                    table, df = ParquetService.load_and_filter_efficient(file_path)
                     
-                # Validate structure
-                is_valid, issues = ParquetService.validate_parquet_structure(df)
+                # Validate structure (works with both PyArrow table and pandas DataFrame)
+                is_valid, issues = ParquetService.validate_parquet_structure(table)
                 
                 if not is_valid:
                     st.error("File validation failed:")
@@ -53,10 +44,11 @@ def render_file_section() -> Tuple[bool, Optional[str]]:
                         st.error(f"• {issue}")
                     return False, file_path
                 
-                # Store in session state
-                st.session_state.parquet_df = df
+                # Store both PyArrow table and DataFrame in session state
+                st.session_state.parquet_table = table  # PyArrow table for efficient operations
+                st.session_state.parquet_df = df  # pandas DataFrame for compatibility
                 st.session_state.parquet_file_path = file_path
-                st.session_state.column_info = ParquetService.get_column_info(df)
+                st.session_state.column_info = ParquetService.get_column_info(table)  # Use PyArrow for analysis
                 
                 # Reset downstream state
                 st.session_state.filtered_df = None
@@ -132,9 +124,6 @@ def render_filter_section() -> Dict[str, Any]:
                 with cols[i]:
                     st.markdown(f"**{col.title()}**")
                     
-                    if info['null_count'] > 0:
-                        st.caption(f"⚠️ {info['null_count']:,} nulls")
-                    
                     if info['type'] == 'categorical':
                         selected_values = st.multiselect(
                             f"Select {col}",
@@ -166,9 +155,6 @@ def render_filter_section() -> Dict[str, Any]:
                 for i, (col, info) in enumerate(row_filters):
                     with cols[i]:
                         st.markdown(f"**{col}**")
-                        
-                        if info['null_count'] > 0:
-                            st.caption(f"⚠️ {info['null_count']:,} nulls")
                         
                         if info['type'] == 'categorical':
                             selected_values = st.multiselect(
@@ -208,7 +194,19 @@ def render_filter_section() -> Dict[str, Any]:
         if st.button("Apply Filters", type="primary"):
             if filters:
                 with st.spinner("Applying filters..."):
-                    filtered_df = ParquetService.apply_filters(df, filters)
+                    # Use PyArrow table for efficient filtering
+                    parquet_table = st.session_state.get("parquet_table", None)
+                    
+                    if parquet_table is not None:
+                        # Use efficient PyArrow filtering
+                        filtered_table = ParquetService.apply_filters_arrow(parquet_table, filters)
+                        filtered_df = filtered_table.to_pandas()
+                    else:
+                        # Convert pandas DataFrame to PyArrow table and filter
+                        table = pa.Table.from_pandas(df)
+                        filtered_table = ParquetService.apply_filters_arrow(table, filters)
+                        filtered_df = filtered_table.to_pandas()
+                    
                     st.session_state.filtered_df = filtered_df
                     st.session_state.current_filters = filters
                     
@@ -282,7 +280,11 @@ def render_clustering_section() -> Tuple[bool, int, str, str, str, int, Optional
             else:
                 st.warning(f"Column '{selected_rank}' not found in data. Using default of 5 clusters.")
                 n_clusters = 5
-        reduction_method = st.selectbox("Dimensionality Reduction", ["TSNE", "PCA", "UMAP"])
+        reduction_method = st.selectbox(
+            "Dimensionality Reduction (for visualization)", 
+            ["TSNE", "PCA", "UMAP"],
+            help="Used only for 2D visualization. Clustering is performed on full high-dimensional embeddings for better quality."
+        )
         
         # Backend and advanced controls
         dim_reduction_backend, clustering_backend, n_workers, seed = render_clustering_backend_controls()
@@ -295,7 +297,7 @@ def render_clustering_section() -> Tuple[bool, int, str, str, str, int, Optional
                     embeddings = ParquetService.extract_embeddings(filtered_df)
                     st.session_state.embeddings = embeddings
                 
-                with st.spinner("Running clustering..."):
+                with st.spinner("Running clustering on full embeddings..."):
                     df_plot, labels = ClusteringService.run_clustering(
                         embeddings, 
                         filtered_df['uuid'].tolist(),  # Use UUIDs as "paths"

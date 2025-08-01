@@ -40,19 +40,22 @@ class ClusteringService:
         Returns:
             Tuple of (cluster dataframe, cluster labels)
         """
+        # Step 1: Perform K-means clustering on full high-dimensional embeddings
+        kmeans, labels = run_kmeans(
+            embeddings,  # Use original high-dimensional embeddings for clustering
+            int(n_clusters), 
+            seed=seed,
+            n_workers=n_workers, 
+            backend=clustering_backend
+        )
+        
+        # Step 2: Reduce dimensionality to 2D for visualization only
         reduced = reduce_dim(
             embeddings, 
             reduction_method, 
             seed=seed,
             n_workers=n_workers, 
             backend=dim_reduction_backend
-        )
-        kmeans, labels = run_kmeans(
-            reduced, 
-            int(n_clusters), 
-            seed=seed,
-            n_workers=n_workers, 
-            backend=clustering_backend
         )
         
         df_plot = pd.DataFrame({
