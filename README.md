@@ -1,13 +1,58 @@
 # emb-explorer
 
-**emb-explorer** is a Streamlit-based visual exploration and clustering tool for image datasets.
+**emb-explorer** is a Streamlit-based visual exploration and clustering tool for image datasets and pre-calculated image embeddings. 
 
-![Embedding Clusters](docs/images/app_screenshot_1.png)
+## 🎯 Demo Screenshots
 
-![Cluster Summary](docs/images/app_screenshot_2.png)
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <h3>📊 Embed & Explore Images</h3>
+    </td>
+    <td width="50%" align="center">
+      <h3>🔍 Explore Pre-calculated Embeddings</h3>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <h4>Embedding Interface</h4>
+      <img src="docs/images/app_screenshot_1.png" alt="Embedding Clusters" width="100%">
+      <p><em>Embed your images using pre-trained models</em></p>
+    </td>
+    <td width="50%">
+      <h4>Smart Filtering</h4>
+      <img src="docs/images/app_screenshot_filter.png" alt="Precalculated Embedding Filters" width="100%">
+      <p><em>Apply filters to pre-calculated embeddings</em></p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <h4>Cluster Summary</h4>
+      <img src="docs/images/app_screenshot_2.png" alt="Cluster Summary" width="100%">
+      <p><em>Analyze clustering results and representative images</em></p>
+    </td>
+    <td width="50%">
+      <h4>Interactive Exploration</h4>
+      <img src="docs/images/app_screenshot_cluster.png" alt="Precalculated Embedding Clusters" width="100%">
+      <p><em>Explore clusters with interactive visualization</em></p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <!-- Empty cell for Page 1 -->
+    </td>
+    <td width="50%">
+      <h4>Taxonomy Tree Navigation</h4>
+      <img src="docs/images/app_screenshot_taxon_tree.png" alt="Precalculated Embedding Taxon Tree" width="100%">
+      <p><em>Browse hierarchical taxonomy structure</em></p>
+    </td>
+  </tr>
+</table>
 
 
 ## Features
+
+### Embed & Explore Images from Upload
 
 * **Batch Image Embedding:**
   Efficiently embed large collections of images using the pretrained model (e.g., CLIP, BioCLIP) on CPU or GPU (preferably), with customizable batch size and parallelism. 
@@ -18,9 +63,11 @@
 * **Clustering Summary:**
   Displays cluster sizes, variances, and representative images for each cluster, helping you evaluate clustering quality.
 
-## Installation
+### Explore Pre-computed Embeddings
 
-### Option 1: Using uv (Recommended)
+TODO...
+
+## Installation
 
 [uv](https://docs.astral.sh/uv/) is a fast Python package installer and resolver. Install `uv` first if you haven't already:
 
@@ -42,42 +89,23 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 uv pip install -e .
 ```
 
-### Option 2: Using pip
-
-```bash
-# Clone the repository
-git clone https://github.com/Imageomics/emb-explorer.git
-cd emb-explorer
-
-# Create virtual environment
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-
-# Install dependencies
-pip install -e .
-```
-
-### Option 3: From requirements.txt (Legacy)
-
-```bash
-# Create virtual environment
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-
-# Install from requirements.txt
-pip install -r requirements.txt
-```
-
 ### GPU Support (Optional)
 
-For GPU acceleration with CUDA, install the additional GPU dependencies:
+For GPU acceleration, you'll need CUDA 12.0+ installed on your system.
 
 ```bash
-# With uv
+# Full GPU support with RAPIDS (cuDF + cuML)
 uv pip install -e ".[gpu]"
 
-# With pip
-pip install -e ".[gpu]"
+# Minimal GPU support (PyTorch + FAISS only)
+uv pip install -e ".[gpu-minimal]"
+```
+
+### Development
+
+```bash
+# Install with development tools
+uv pip install -e ".[dev]"
 ```
 
 ## Usage
@@ -108,33 +136,6 @@ python list_models.py --format names
 
 # Get help for the list models command
 python list_models.py --help
-```
-
-### Quick Setup Script
-
-For convenience, you can use the provided setup script:
-
-```bash
-# Make script executable and run
-chmod +x setup.sh
-
-# Install dependencies and run the app
-./setup.sh
-
-# Or run specific commands
-./setup.sh install  # Just install dependencies
-./setup.sh models   # List available models
-./setup.sh run      # Just run the app
-./setup.sh help     # Show help
-```
-
-### Development Testing
-
-To test your installation:
-
-```bash
-# Run development tests
-python test_installation.py
 ```
 
 ### Running on Remote Compute Nodes
@@ -173,7 +174,7 @@ The `-N` flag prevents SSH from executing remote commands, and `-L` sets up the 
 
 ## Acknowledgements
 
-* [CLIP](https://github.com/openai/CLIP)
+* [OpenCLIP](https://github.com/mlfoundations/open_clip)
 * [Streamlit](https://streamlit.io/)
 * [Altair](https://altair-viz.github.io/)
 
