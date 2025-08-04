@@ -67,14 +67,20 @@ def render_taxonomic_tree_summary():
                 help="Maximum depth of the taxonomy tree to display"
             )
         
-        # Create a stable cache key based on the data hash and filter parameters
-        # Use a hash of the filtered_df UUID column to detect data changes
-        data_hash = hash(tuple(filtered_df['uuid'].iloc[:min(1000, len(filtered_df))]))  # Sample first 1000 for performance
-        cache_key = f"taxonomy_{data_hash}_{selected_cluster}_{min_count}_{tree_depth}"
+        # Create a stable cache key based on the data characteristics and filter parameters
+        # Use data length and a sample of UUIDs for a stable data identifier
+        data_length = len(filtered_df)
+        # Use a stable string representation instead of hash for consistency
+        sample_uuids = filtered_df['uuid'].iloc[:min(10, len(filtered_df))].tolist()
+        data_id = f"{data_length}_{len(sample_uuids)}_{sample_uuids[0] if sample_uuids else 'empty'}"
+        cache_key = f"taxonomy_{data_id}_{selected_cluster}_{min_count}_{tree_depth}"
         
         # Check if we have cached results and they're still valid
-        if (cache_key not in st.session_state or 
-            st.session_state.get("taxonomy_cache_key") != cache_key):
+        # Also ensure critical session state data hasn't changed unexpectedly
+        current_cache_key = st.session_state.get("taxonomy_cache_key")
+        cache_exists = cache_key in st.session_state
+        
+        if (not cache_exists or current_cache_key != cache_key):
             
             # Data or parameters changed, regenerate taxonomy tree
             with st.spinner("Building taxonomy tree..."):

@@ -96,7 +96,7 @@ def render_filter_section() -> Dict[str, Any]:
         filters = {}
         
         # Define taxonomy columns in order
-        taxonomy_columns = ['kingdom', 'phylum', 'class', 'order', 'family', 'genus', 'species']
+        taxonomy_columns = ['kingdom', 'phylum', 'class', 'order', 'family', 'genus', 'species', 'scientific_name', 'common_name']
         
         # Separate taxonomy and other columns
         taxonomy_filters = []
