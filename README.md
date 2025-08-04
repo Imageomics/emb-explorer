@@ -65,7 +65,14 @@
 
 ### Explore Pre-computed Embeddings
 
-TODO...
+* **Parquet File Support:**
+  Load precomputed embeddings with associated metadata from parquet files. Compatible with various embedding formats and metadata schemas.
+* **Advanced Filtering:**
+  Filter datasets by taxonomic hierarchy, source datasets, and custom metadata fields. Combine multiple filter criteria for precise data selection.
+* **Clustering:**
+  Reduces embedding vectors to 2D using PCA and UMAP. Performs K-Means clustering and display result using a scatter plot. Explore clusters via interactive scatter plots. Click on points to preview images and explore metadata details.
+* **Taxonomy Tree Navigation:**
+  Browse hierarchical biological classifications with interactive tree view. Expand and collapse taxonomic nodes to explore at different classification levels.
 
 ## Installation
 
