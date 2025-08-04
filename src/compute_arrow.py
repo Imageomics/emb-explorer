@@ -3,6 +3,7 @@ import gc
 
 from cuml import KMeans as SingleGPU_KMeans
 from cuml.decomposition import PCA as SingleGPU_PCA
+from cuml.manifold.umap import UMAP as SingleGPU_UMAP
 
 import cudf
 import cupy as cp
@@ -57,7 +58,14 @@ def main(config):
         partitioning="hive"
     )
     
-    table = dataset.to_table(filter=expr, columns=["uuid", "emb"], use_threads=True, batch_readahead=32)
+    #table = dataset.to_table(filter=expr, columns=["uuid", "emb"], use_threads=True, batch_readahead=32)
+    table = dataset.to_table(filter=expr, use_threads=True, batch_readahead=32)
+    table_metadata = table.select(
+        [col for col in table.column_names if col != "emb"]
+    )
+    
+    
+    
     
     chunked_array = table["emb"] 
     large_chunks = [chunk.cast(pa.large_list(pa.float32())) for chunk in chunked_array.chunks]
@@ -99,14 +107,24 @@ def main(config):
     
     # ---- Dim Reduction ---- #
     dim_reduction_spec = config.get("dim_reduction_spec")
-    model_pca = SingleGPU_PCA(
-        n_components=dim_reduction_spec.get('n_components', 2)
-    )
-    emb_reduced = model_pca.fit_transform(cupy_darr)
+    
+    if dim_reduction_spec.get('method', 'pca') == 'pca':
+        model_pca = SingleGPU_PCA(
+            n_components=dim_reduction_spec.get('n_components', 2)
+        )
+        emb_reduced = model_pca.fit_transform(cupy_darr)
 
-    logging.info("Dimensionality reduction complete.")
-    gpu_mem_mb = pynvml.nvmlDeviceGetMemoryInfo(gpu_handle).used / 1e6
-    logging.info(f"GPU Memory Usage: {gpu_mem_mb:.2f} MB")
+        logging.info("Dimensionality reduction complete.")
+        gpu_mem_mb = pynvml.nvmlDeviceGetMemoryInfo(gpu_handle).used / 1e6
+        logging.info(f"GPU Memory Usage: {gpu_mem_mb:.2f} MB")
+    elif dim_reduction_spec.get('method', 'pca') == 'umap':
+        model_umap = SingleGPU_UMAP(
+            n_components=dim_reduction_spec.get('n_components', 2)
+        )
+        emb_reduced = model_umap.fit_transform(cupy_darr)
+        logging.info("Dimensionality reduction complete.")
+        gpu_mem_mb = pynvml.nvmlDeviceGetMemoryInfo(gpu_handle).used / 1e6
+        logging.info(f"GPU Memory Usage: {gpu_mem_mb:.2f} MB")
 
     # --- Combine ---- #
     
@@ -115,22 +133,23 @@ def main(config):
     cp.get_default_memory_pool().free_all_blocks()
     cp.get_default_pinned_memory_pool().free_all_blocks()
     gpu_mem_mb = pynvml.nvmlDeviceGetMemoryInfo(gpu_handle).used / 1e6
-    logging.info("Cleared GPU memory after PCA.")
+    logging.info("Cleared GPU memory after dim reduction.")
     logging.info(f"GPU Memory Usage: {gpu_mem_mb:.2f} MB")
 
     # Combine uuid, emb_reduced, and kmeans labels into a DataFrame
     
     #uuid_series = dask_df["uuid"].compute().reset_index(drop=True)
+    metadata_cudf = cudf.DataFrame.from_arrow(table_metadata).reset_index(drop=True)
     labels_series = cudf.Series(model_kmeans.labels_, name="cluster_label").reset_index(drop=True)
+    labels_series = labels_series.astype("str")
     emb_reduced_cudf = cudf.DataFrame(emb_reduced, columns=["dim_1", "dim_2"]).reset_index(drop=True)
     
     logging.info(f"Convert cupy array results to cudf series")
     gpu_mem_mb = pynvml.nvmlDeviceGetMemoryInfo(gpu_handle).used / 1e6
-    logging.info("Cleared GPU memory after PCA.")
     logging.info(f"GPU Memory Usage: {gpu_mem_mb:.2f} MB")
     
     combined_cudf = cudf.concat(
-        [emb_reduced_cudf, labels_series],
+        [metadata_cudf, emb_reduced_cudf, labels_series],
         axis=1
     )
 

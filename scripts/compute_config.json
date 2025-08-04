@@ -1,6 +1,6 @@
 {
-  "data_path": "/fs/scratch/PAS2136/TreeOfLife/embeddings/model=BioCLIP-2/demo/sample_1M",
-  "output_dir": "/users/PZS1008/netzhang/emb-explorer/output/sample_1M",
+  "data_path": "/fs/scratch/PAS2136/TreeOfLife/embeddings/model=BioCLIP-2/demo/partitioned/sample_5M_pyarrow",
+  "output_dir": "/users/PZS1008/netzhang/emb-explorer/output/sample_5M_pyarrow_with_metadata",
 
   "filters": {
     "source_dataset": [],
@@ -8,7 +8,7 @@
     "basisOfRecord": [],
     "img_type": [],
     
-    "kingdom": ["Animalia", "Fungi"],
+    "kingdom": ["Animalia", "Fungi", "Plantae"],
     "phylum": [],
     "class": [],
     "order": [],
@@ -26,7 +26,7 @@
   },
 
   "dim_reduction_spec": {
-    "model": "pca",
+    "model": "umap",
     "n_components": 2
   }
 

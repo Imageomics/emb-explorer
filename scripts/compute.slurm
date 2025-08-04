@@ -5,7 +5,7 @@
 #SBATCH --gpus-per-task=1                     
 #SBATCH --cpus-per-task=60          
 #SBATCH --partition=nextgen             
-#SBATCH --time=00:02:00                        
+#SBATCH --time=00:10:00                        
 #SBATCH --output=logs/compute_%j.out      
 #SBATCH --error=logs/compute_%j.err       
 #SBATCH --account=PAS2136
@@ -18,5 +18,5 @@ which python
 
 CONFIG_FILE="/users/PZS1008/netzhang/emb-explorer/compute_config.json"
 
-python src/compute.py \
+python src/compute_arrow.py \
     --config "${CONFIG_FILE}"

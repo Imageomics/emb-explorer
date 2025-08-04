@@ -47,6 +47,19 @@ def init_dask():
     dask.config.set({"dataframe.backend": "cudf"})
     return client, cluster
 
+
+def monitor_gpu_memory():
+    """Monitor and log GPU memory usage"""
+    mempool = cp.get_default_memory_pool()
+    used_bytes = mempool.used_bytes()
+    total_bytes = mempool.total_bytes()
+    logging.info(f"GPU Memory: {used_bytes/1e9:.2f}GB used / {total_bytes/1e9:.2f}GB total")
+
+def clear_gpu_memory():
+    """Clear GPU memory pools"""
+    cp.get_default_memory_pool().free_all_blocks()
+    cp.get_default_pinned_memory_pool().free_all_blocks()
+    
 # =================== #
 # ---- Load Data ----
 # =================== #
@@ -73,7 +86,9 @@ def load_data(data_dir: str, filters: dict = None) -> dd.DataFrame:
     
     dask_df = dd.read_parquet(
         path = data_dir,
-        filters = filters
+        filters = filters,
+        blocksize= "2048MB"  # Adjust block size for optimal performance
+        #aggregate_files=True
     )
     return dask_df
     
@@ -93,18 +108,31 @@ def main(config):
     client, cluster = init_dask()
     dask.config.set({"dataframe.backend": "cudf"})
     
-    dask_df = load_data(
-        config.get("data_path"),
-        config.get("filters", {})
-    )
+    try:
+        dask_df = load_data(
+            config.get("data_path"),
+            config.get("filters", {})
+        )
+        
+        monitor_gpu_memory()
+        
+        logging.info(f"Number of partitions: {dask_df.npartitions}")
+        
+        cupy_darr = dask_df.map_partitions(
+            get_array_from_df, 
+            "emb", 
+            meta=cp.ndarray([1, 1])
+        )
+        
+        clear_gpu_memory()
+        monitor_gpu_memory()
+        cupy_darr = cupy_darr.compute()
     
-    cupy_darr = dask_df.map_partitions(
-        get_array_from_df, 
-        "emb", 
-        meta=cp.ndarray([1, 1])
-    )
+    except MemoryError as e:
+        logging.error(f"Memory error encountered: {e}")
+        clear_gpu_memory()
+        raise
     
-    cupy_darr = cupy_darr.compute()
     
     logging.info(f"Embeddings shape: {cupy_darr.shape}")
 
