@@ -146,9 +146,9 @@ def run_kmeans(embeddings: np.ndarray, n_clusters: int, seed: Optional[int] = No
         return _run_kmeans_faiss(embeddings, n_clusters, seed, n_workers)
     elif backend == "auto":
         # Auto selection priority: cuML > FAISS > sklearn
-        if HAS_CUML and HAS_CUDA and embeddings.shape[0] > 5000:
+        if HAS_CUML and HAS_CUDA and embeddings.shape[0] > 500:
             return _run_kmeans_cuml(embeddings, n_clusters, seed, n_workers)
-        elif HAS_FAISS and embeddings.shape[0] > 10000:
+        elif HAS_FAISS and embeddings.shape[0] > 500:
             return _run_kmeans_faiss(embeddings, n_clusters, seed, n_workers)
         else:
             return _run_kmeans_sklearn(embeddings, n_clusters, seed)
