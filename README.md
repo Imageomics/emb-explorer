@@ -127,6 +127,8 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 streamlit run app.py
 ```
 
+An example dataset (`example_1k.parquet`) is provided in the `data/` folder for testing the precalculated embeddings features.
+
 ### Command Line Tools
 
 The project also provides command-line utilities:
