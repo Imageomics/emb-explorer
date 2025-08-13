@@ -171,7 +171,7 @@ def main(config):
     logging.info(f"Pipeline completed successfully in {total_time:.2f} seconds")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Run Dask-based data processing and clustering.")
+    parser = argparse.ArgumentParser(description="Run data processing and clustering.")
     parser.add_argument("--config", type=str, required=True, help="Path to the configuration file.")
     
     args = parser.parse_args()
