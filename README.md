@@ -70,7 +70,7 @@
 * **Advanced Filtering:**
   Filter datasets by taxonomic hierarchy, source datasets, and custom metadata fields. Combine multiple filter criteria for precise data selection.
 * **Clustering:**
-  Reduces embedding vectors to 2D using PCA and UMAP. Performs K-Means clustering and display result using a scatter plot. Explore clusters via interactive scatter plots. Click on points to preview images and explore metadata details.
+  Reduce embedding vectors to 2D using PCA, UMAP, or t-SNE. Perform K-Means clustering and display result using a scatter plot. Explore clusters via interactive scatter plots. Click on points to preview images and explore metadata details.
 * **Taxonomy Tree Navigation:**
   Browse hierarchical biological classifications with interactive tree view. Expand and collapse taxonomic nodes to explore at different classification levels.
 
@@ -127,7 +127,7 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 streamlit run app.py
 ```
 
-An example dataset (`example_1k.parquet`) is provided in the `data/` folder for testing the precalculated embeddings features.
+An example dataset (`example_1k.parquet`) is provided in the `data/` folder for testing the pre-calculated embeddings features. This parquet contains metadata and the [BioCLIP 2](https://imageomics.github.io/bioclip-2/) embeddings for a one thousand-image subset of [TreeOfLife-200M](https://huggingface.co/datasets/imageomics/TreeOfLife-200M).
 
 ### Command Line Tools
 
@@ -179,7 +179,9 @@ If running the app on a remote compute node (e.g., HPC cluster), you'll need to 
 
 The `-N` flag prevents SSH from executing remote commands, and `-L` sets up the local port forwarding.
 
+### Notes on Implementation
 
+More notes on different implementation methods and approaches are available in the [implementation summary doc](docs/implementation_summary.md).
 
 ## Acknowledgements
 
