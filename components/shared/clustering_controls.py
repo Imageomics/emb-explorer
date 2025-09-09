@@ -62,35 +62,6 @@ def render_clustering_backend_controls():
         
     with st.expander("🔧 Available Backends:", expanded=False):
         
-        # col1, col2 = st.columns(2)
-        
-        # with col1:
-        #     st.markdown("**Dimensionality Reduction:**")
-        #     if has_cuml and has_cuda:
-        #         st.success("🚀 GPU (cuML) + CPU available")
-        #     elif has_cuml:
-        #         st.warning("⚠️ cuML installed, no GPU")
-        #     else:
-        #         st.info("💻 CPU only (sklearn)")
-        
-        # with col2:
-        #     st.markdown("**Clustering:**")
-        #     if has_cuml and has_cuda:
-        #         st.success("🚀 GPU + Fast CPU available")
-        #     elif has_faiss:
-        #         st.info("🔥 Fast CPU (FAISS) available")
-        #     else:
-        #         st.info("💻 Standard CPU only")
-        
-        # Installation hints
-        # if not has_cuml:
-        #     st.info("💡 Install cuML for GPU acceleration: `conda install -c rapidsai cuml`")
-        # elif not has_cuda and has_cuml:
-        #     st.warning("⚠️ cuML installed but no CUDA GPU detected")
-        
-        # if not has_faiss:
-        #     st.info("💡 Install FAISS for faster CPU clustering: `pip install faiss-cpu`")
-        
         # Explicit backend selection with two columns
         col1, col2 = st.columns(2)
         
