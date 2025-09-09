@@ -54,14 +54,14 @@ cupy_array = cp.asarray(np_view.reshape(num_rows, inner_len))
 The application supports multiple computational backends with automatic selection based on data size and hardware availability:
 
 #### 1. **cuML (GPU-Accelerated)**
-- **Primary Choice**: For large datasets (>5000 samples) with CUDA GPU available
+- **Primary Choice**: For large datasets (>5,000 samples) with CUDA GPU available
 - **Components**: 
   - `cuml.cluster.KMeans` for clustering
   - `cuml.decomposition.PCA`, `cuml.manifold.TSNE`, `cuml.manifold.UMAP` for dimensionality reduction
 - **Memory Management**: Direct CuPy array operations, GPU memory pooling
 
 #### 2. **FAISS (CPU/GPU)**
-- **Use Case**: Large datasets (>10000 samples) when cuML unavailable
+- **Use Case**: Large datasets (>10,000 samples) when cuML unavailable
 - **Features**: 
   - Optimized nearest neighbor search
   - Multi-threaded CPU execution
