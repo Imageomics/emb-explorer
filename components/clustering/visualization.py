@@ -94,7 +94,7 @@ def render_image_preview():
     ):
         img_path = valid_paths[selected_idx]
         cluster = labels[selected_idx] if labels is not None else "?"
-        st.image(img_path, caption=f"Cluster {cluster}: {os.path.basename(img_path)}", use_container_width=True)
+        st.image(img_path, caption=f"Cluster {cluster}: {os.path.basename(img_path)}", width='stretch')
         st.markdown(f"**File:** `{os.path.basename(img_path)}`")
         st.markdown(f"**Cluster:** `{cluster}`")
     else:

@@ -92,7 +92,7 @@ def render_data_preview():
                     image = fetch_image_from_url(identifier_url)
                     
                 if image is not None:
-                    st.image(image, caption=f"Image from: {identifier_url}", use_container_width=True)
+                    st.image(image, caption=f"Image from: {identifier_url}", width='stretch')
                 else:
                     st.info(f"Could not fetch image from: {identifier_url}")
                     with st.expander("🔗 Image URL"):
@@ -143,7 +143,7 @@ def render_data_preview():
                 
                 if display_data:
                     metadata_df = pd.DataFrame(display_data)
-                    st.dataframe(metadata_df, hide_index=True, use_container_width=True)
+                    st.dataframe(metadata_df, hide_index=True, width='stretch')
     
     else:
         st.info("📋 Record details will appear here after you select a point in the cluster plot.")
@@ -207,4 +207,4 @@ def render_cluster_statistics():
                 })
         
         summary_df = pd.DataFrame(cluster_summary)
-        st.dataframe(summary_df, hide_index=True, use_container_width=True)
+        st.dataframe(summary_df, hide_index=True, width='stretch')

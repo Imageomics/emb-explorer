@@ -167,7 +167,7 @@ def render_clustering_summary(show_taxonomy=False):
                     embeddings, labels, df_plot
                 )
                 
-                st.dataframe(summary_df, hide_index=True, use_container_width=True)
+                st.dataframe(summary_df, hide_index=True, width='stretch')
 
                 st.markdown("#### Representative Images")
                 for row in summary_df.itertuples():
@@ -178,7 +178,7 @@ def render_clustering_summary(show_taxonomy=False):
                         img_path = df_plot.iloc[img_idx]["image_path"]
                         img_cols[i].image(
                             img_path, 
-                            use_container_width=True, 
+                            width='stretch', 
                             caption=os.path.basename(img_path)
                         )
                         
