@@ -1,0 +1,149 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "emb-explorer"
+version = "0.1.0"
+description = "Image clustering tool using embeddings with Streamlit interface"
+readme = "README.md"
+license = {file = "LICENSE"}
+authors = [
+    { name = "Net Zhang", email = "zhang.11091@osu.edu" },
+    { name = "Elizabeth G. Campolongo", email = "e.campolongo479@gmail.com" },
+    { name = "Matthew J. Thompson", email = "thompson.m.j@outlook.com" },
+    { name = "Sreejith Menon", email = "sreejithmenon@google.com" },
+    { name = "Jianyang Gu", email = "gu.1220@osu.edu" },
+    { name = "Arnab Nandi", email = "nandi.9@osu.edu" }
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Multimedia :: Graphics",
+]
+requires-python = ">=3.10"
+dependencies = [
+    # Core UI and web framework
+    "streamlit>=1.40.0",
+    # Data processing and numerical computing
+    "numpy>=1.21.0",
+    "pandas>=2.0.0",
+    "pillow>=9.0.0",
+    "pyarrow>=10.0.0",
+    # Visualization
+    "altair>=5.0.0",
+    # Machine learning
+    "scikit-learn>=1.0.0",
+    "umap-learn>=0.5.0",
+    "numba>=0.57.0", 
+    "faiss-cpu>=1.7.0",
+    # Vision-language models
+    "open-clip-torch>=2.20.0",
+    # Custom inference package
+    "hpc-inference @ git+https://github.com/Imageomics/hpc-inference.git"
+]
+
+[project.optional-dependencies]
+dev = [
+    "jupyter>=1.0.0",
+    "notebook>=6.0.0",
+    "ipykernel>=6.0.0",
+    "pytest>=7.0.0",
+    "black>=22.0.0",
+    "flake8>=4.0.0",
+    "mypy>=0.950",
+]
+# GPU acceleration with cuDF and cuML
+gpu = [
+    # PyTorch for CUDA detection and some models
+    "torch>=2.0.0",
+    # NVIDIA CUDA runtime libraries (required for cuDF/cuML)
+    "nvidia-cublas-cu12",
+    "nvidia-cuda-runtime-cu12",
+    "nvidia-cudnn-cu12",
+    "nvidia-cufft-cu12",
+    "nvidia-curand-cu12",
+    "nvidia-cusolver-cu12",
+    "nvidia-cusparse-cu12",
+    # Essential RAPIDS packages
+    "cudf-cu12==25.6.*",
+    "cuml-cu12==25.6.*",
+    # Fast GPU clustering
+    "faiss-gpu-cu12>=1.11.0",
+]
+# Minimal GPU support (just PyTorch + FAISS GPU)
+gpu-minimal = [
+    "torch>=2.0.0",
+    "faiss-gpu-cu12>=1.11.0",
+]
+all = [
+    "emb-explorer[dev,gpu]",
+]
+
+[project.urls]
+Homepage = "https://github.com/Imageomics/emb-explorer"
+Repository = "https://github.com/Imageomics/emb-explorer"
+Issues = "https://github.com/Imageomics/emb-explorer/issues"
+
+[project.scripts]
+emb-explorer = "app:main"
+list-models = "utils.models:list_available_models"
+
+[tool.hatch.version]
+path = "utils/__init__.py"
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["utils"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/utils",
+    "/app.py",
+    "/list_models.py",
+    "/setup.sh",
+    "/README.md",
+    "/LICENSE",
+    "/requirements.txt",
+    "/data",
+]
+
+[tool.black]
+line-length = 88
+target-version = ['py310', 'py311', 'py312']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  __pycache__
+| \.git
+| \.mypy_cache
+| \.pytest_cache
+| \.venv
+| _build
+| build
+| dist
+)/
+'''
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"

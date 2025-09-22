@@ -1,0 +1,38 @@
+{
+  "_description": "Template configuration file for running compute jobs. Replace placeholder values with your actual paths and parameters.",
+  
+  "data_path": "<PATH_TO_YOUR_PARQUET_DATA>",
+  "output_dir": "<PATH_TO_OUTPUT_DIRECTORY>",
+
+  "filters": {
+    "_description": "Data filtering options. Leave arrays empty [] to include all values, or specify values to filter by.",
+    
+    "source_dataset": [],
+    "publisher": [],
+    "basisOfRecord": [],
+    "img_type": [],
+    
+    "kingdom": ["<KINGDOM_1>", "<KINGDOM_2>"],
+    "phylum": [],
+    "class": [],
+    "order": [],
+    "family": [],
+    "genus": [],
+    "species": [],
+    "scientific_name": [],
+    "common_name": []
+  },
+
+  "cluster_spec": {
+    "_description": "Clustering algorithm configuration",
+    "model": "<CLUSTERING_MODEL>",
+    "n_clusters": "<NUMBER_OF_CLUSTERS>",
+    "rnd_state": 42
+  },
+
+  "dim_reduction_spec": {
+    "_description": "Dimensionality reduction configuration",
+    "model": "<DIM_REDUCTION_MODEL>",
+    "n_components": "<NUMBER_OF_COMPONENTS>"
+  }
+}
