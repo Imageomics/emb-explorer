@@ -9,8 +9,8 @@ import os
 from typing import Dict, Any, Optional, Tuple
 
 from services.parquet_service import ParquetService
-from services.clustering_service import ClusteringService
-from components.shared.clustering_controls import render_clustering_backend_controls, render_basic_clustering_controls
+from shared.services.clustering_service import ClusteringService
+from shared.components.clustering_controls import render_clustering_backend_controls, render_basic_clustering_controls
 
 
 def render_file_section() -> Tuple[bool, Optional[str]]:

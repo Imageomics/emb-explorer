@@ -31,9 +31,9 @@ classifiers = [
 requires-python = ">=3.10"
 dependencies = [
     # Core UI and web framework
-    "streamlit>=1.40.0",
+    "streamlit>=1.50.0",
     # Data processing and numerical computing
-    "numpy>=1.21.0",
+    "numpy<=2.2.0",
     "pandas>=2.0.0",
     "pillow>=9.0.0",
     "pyarrow>=10.0.0",
@@ -93,23 +93,22 @@ Repository = "https://github.com/Imageomics/emb-explorer"
 Issues = "https://github.com/Imageomics/emb-explorer/issues"
 
 [project.scripts]
-emb-explorer = "app:main"
-list-models = "utils.models:list_available_models"
+emb-embed-explore = "apps.embed_explore.app:main"
+list-models = "shared.utils.models:list_available_models"
 
 [tool.hatch.version]
-path = "utils/__init__.py"
+path = "shared/__init__.py"
 
 [tool.hatch.metadata]
 allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
-packages = ["utils"]
+packages = ["shared", "apps"]
 
 [tool.hatch.build.targets.sdist]
 include = [
-    "/utils",
-    "/app.py",
-    "/list_models.py",
+    "/shared",
+    "/apps",
     "/setup.sh",
     "/README.md",
     "/LICENSE",

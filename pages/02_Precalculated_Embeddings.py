@@ -11,9 +11,9 @@ from components.precalculated.sidebar import (
     render_filter_section,
     render_clustering_section
 )
-from components.clustering.visualization import render_scatter_plot
+from shared.components.visualization import render_scatter_plot
 from components.precalculated.data_preview import render_data_preview
-from components.clustering.summary import render_clustering_summary
+from shared.components.summary import render_clustering_summary
 
 
 def main():
