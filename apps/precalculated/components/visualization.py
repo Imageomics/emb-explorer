@@ -13,13 +13,14 @@ def render_scatter_plot():
 
     if df_plot is not None and len(df_plot) > 1:
         # Plot options
-        show_density = st.checkbox(
-            "Show density heatmap",
-            value=st.session_state.get("show_density", False),
-            key="density_toggle",
-            help="Overlay density heatmap to visualize point concentration"
+        density_mode = st.radio(
+            "Density visualization",
+            options=["Off", "Opacity", "Heatmap"],
+            index=0,
+            horizontal=True,
+            key="density_mode",
+            help="Off: normal view | Opacity: lower opacity to show overlap | Heatmap: 2D binned density (disables selection)"
         )
-        st.session_state["show_density"] = show_density
 
         point_selector = alt.selection_point(fields=["idx"], name="point_selection")
 
@@ -39,10 +40,18 @@ def render_scatter_plot():
         metadata_cols = [c for c in df_plot.columns if c not in skip_cols][:8]
         tooltip_fields.extend(metadata_cols)
 
+        # Set opacity based on density mode
+        if density_mode == "Opacity":
+            point_opacity = 0.15  # Low opacity so overlaps show density
+        elif density_mode == "Heatmap":
+            point_opacity = 0.5  # Medium opacity when heatmap is behind
+        else:
+            point_opacity = 0.7  # Normal opacity
+
         # Create scatter plot
         scatter = (
             alt.Chart(df_plot)
-            .mark_circle(size=60, opacity=0.5 if show_density else 0.7)
+            .mark_circle(size=60, opacity=point_opacity)
             .encode(
                 x=alt.X('x:Q', scale=alt.Scale(zero=False)),
                 y=alt.Y('y:Q', scale=alt.Scale(zero=False)),
@@ -53,7 +62,7 @@ def render_scatter_plot():
             .add_params(point_selector)
         )
 
-        if show_density:
+        if density_mode == "Heatmap":
             # Create 2D density heatmap layer
             density = (
                 alt.Chart(df_plot)
@@ -75,7 +84,7 @@ def render_scatter_plot():
 
         # Apply common properties and interactivity
         title_suffix = " (scroll to zoom, drag to pan)"
-        if not show_density:
+        if density_mode != "Heatmap":
             title_suffix += ", click to select"
 
         chart = (
@@ -89,10 +98,10 @@ def render_scatter_plot():
         )
 
         # Streamlit doesn't support selections on layered charts, so only enable
-        # selection when density is off
-        if show_density:
+        # selection when not using heatmap mode
+        if density_mode == "Heatmap":
             st.altair_chart(chart, key="alt_chart", width="stretch")
-            st.caption("Note: Point selection is disabled when density heatmap is shown.")
+            st.caption("Note: Point selection is disabled when heatmap is shown.")
         else:
             event = st.altair_chart(chart, key="alt_chart", on_select="rerun", width="stretch")
 
