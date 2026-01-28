@@ -1,0 +1,67 @@
+"""
+Visualization components for the precalculated embeddings application.
+"""
+
+import streamlit as st
+import altair as alt
+
+
+def render_scatter_plot():
+    """Render the main clustering scatter plot with dynamic tooltips."""
+    df_plot = st.session_state.get("data", None)
+    labels = st.session_state.get("labels", None)
+
+    if df_plot is not None and len(df_plot) > 1:
+        point_selector = alt.selection_point(fields=["idx"], name="point_selection")
+
+        # Build tooltip fields dynamically from available columns
+        tooltip_fields = []
+
+        # Always include cluster info
+        if 'cluster_name' in df_plot.columns:
+            tooltip_fields.append('cluster_name:N')
+            cluster_field = 'cluster_name:N'
+        else:
+            tooltip_fields.append('cluster:N')
+            cluster_field = 'cluster:N'
+
+        # Add other metadata columns (limit to prevent tooltip overflow)
+        skip_cols = {'x', 'y', 'cluster', 'cluster_name', 'idx', 'uuid', 'emb'}
+        metadata_cols = [c for c in df_plot.columns if c not in skip_cols][:8]
+        tooltip_fields.extend(metadata_cols)
+
+        scatter = (
+            alt.Chart(df_plot)
+            .mark_circle(size=60)
+            .encode(
+                x=alt.X('x', scale=alt.Scale(zero=False)),
+                y=alt.Y('y', scale=alt.Scale(zero=False)),
+                color=alt.Color('cluster:N', legend=alt.Legend(title="Cluster")),
+                tooltip=tooltip_fields,
+                fillOpacity=alt.condition(point_selector, alt.value(1), alt.value(0.3))
+            )
+            .add_params(point_selector)
+            .properties(
+                width=800,
+                height=700,
+                title="Embedding Clusters (click a point to view details)"
+            )
+        )
+
+        event = st.altair_chart(scatter, key="alt_chart", on_select="rerun", width="stretch")
+
+        # Handle selection - track data version to ensure selection is tied to current data
+        if (
+            event
+            and "selection" in event
+            and "point_selection" in event["selection"]
+            and event["selection"]["point_selection"]
+        ):
+            new_idx = int(event["selection"]["point_selection"][0]["idx"])
+            st.session_state["selected_image_idx"] = new_idx
+            # Store the data version when this selection was made
+            st.session_state["selection_data_version"] = st.session_state.get("data_version", None)
+
+    else:
+        st.info("Run clustering to see the visualization.")
+        st.session_state['selected_image_idx'] = None

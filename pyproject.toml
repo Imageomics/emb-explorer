@@ -94,6 +94,7 @@ Issues = "https://github.com/Imageomics/emb-explorer/issues"
 
 [project.scripts]
 emb-embed-explore = "apps.embed_explore.app:main"
+emb-precalculated = "apps.precalculated.app:main"
 list-models = "shared.utils.models:list_available_models"
 
 [tool.hatch.version]

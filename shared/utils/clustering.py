@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Tuple
 import numpy as np
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
@@ -34,6 +34,97 @@ except ImportError:
         HAS_CUDA = cp.cuda.is_available()
     except ImportError:
         HAS_CUDA = False
+
+
+class VRAMExceededError(Exception):
+    """Raised when GPU VRAM is exceeded during computation."""
+    pass
+
+
+class GPUArchitectureError(Exception):
+    """Raised when GPU architecture is not supported."""
+    pass
+
+
+def is_cuda_oom_error(error: Exception) -> bool:
+    """Check if an exception is a CUDA out-of-memory error."""
+    error_msg = str(error).lower()
+    oom_indicators = [
+        "out of memory",
+        "cuda error: out of memory",
+        "cudaerroroutofmemory",
+        "oom",
+        "memory allocation failed",
+        "cudamalloc failed",
+        "failed to allocate",
+    ]
+    return any(indicator in error_msg for indicator in oom_indicators)
+
+
+def is_cuda_arch_error(error: Exception) -> bool:
+    """Check if an exception is a CUDA architecture incompatibility error."""
+    error_msg = str(error).lower()
+    arch_indicators = [
+        "no kernel image",
+        "cudaerrornokernel",
+        "unsupported gpu",
+        "compute capability",
+    ]
+    return any(indicator in error_msg for indicator in arch_indicators)
+
+
+def get_gpu_memory_info() -> Optional[Tuple[int, int]]:
+    """
+    Get GPU memory info (used, total) in MB.
+
+    Returns:
+        Tuple of (used_mb, total_mb) or None if unavailable.
+    """
+    try:
+        if HAS_CUML and HAS_CUDA:
+            meminfo = cp.cuda.Device().mem_info
+            free_bytes, total_bytes = meminfo
+            used_bytes = total_bytes - free_bytes
+            return (used_bytes // (1024 * 1024), total_bytes // (1024 * 1024))
+    except Exception:
+        pass
+
+    try:
+        import torch
+        if torch.cuda.is_available():
+            used = torch.cuda.memory_allocated() // (1024 * 1024)
+            total = torch.cuda.get_device_properties(0).total_memory // (1024 * 1024)
+            return (used, total)
+    except Exception:
+        pass
+
+    return None
+
+
+def estimate_memory_requirement(n_samples: int, n_features: int, method: str) -> int:
+    """
+    Estimate memory requirement in MB for dimensionality reduction.
+
+    Args:
+        n_samples: Number of samples
+        n_features: Number of features
+        method: Reduction method (PCA, TSNE, UMAP)
+
+    Returns:
+        Estimated memory in MB
+    """
+    # Base memory for input data (float32)
+    base_mb = (n_samples * n_features * 4) / (1024 * 1024)
+
+    # Method-specific multipliers (empirical estimates)
+    if method.upper() == "PCA":
+        return int(base_mb * 2)  # Relatively low overhead
+    elif method.upper() == "TSNE":
+        return int(base_mb * 4 + (n_samples * n_samples * 4) / (1024 * 1024))  # Distance matrix
+    elif method.upper() == "UMAP":
+        return int(base_mb * 3 + (n_samples * 15 * 4) / (1024 * 1024))  # kNN graph
+    else:
+        return int(base_mb * 3)
 
 def reduce_dim(embeddings: np.ndarray, method: str = "PCA", seed: Optional[int] = None, n_workers: int = 1, backend: str = "auto"):
     """

@@ -6,7 +6,7 @@ import streamlit as st
 import os
 import pandas as pd
 from shared.services.clustering_service import ClusteringService
-from utils.taxonomy_tree import build_taxonomic_tree, format_tree_string, get_tree_statistics
+from shared.utils.taxonomy_tree import build_taxonomic_tree, format_tree_string, get_tree_statistics
 
 
 def render_taxonomic_tree_summary():
