@@ -90,27 +90,37 @@ def render_scatter_plot():
             chart = scatter
 
         # Apply common properties and interactivity
+        title_suffix = " (scroll to zoom, drag to pan)"
+        if not show_density:
+            title_suffix += ", click to select"
+
         chart = (
             chart
             .properties(
                 width=800,
                 height=700,
-                title=title + " (scroll to zoom, drag to pan)"
+                title=title + title_suffix
             )
             .interactive()  # Enable zoom/pan
         )
 
-        event = st.altair_chart(chart, key="alt_chart", on_select="rerun", width="stretch")
+        # Streamlit doesn't support selections on layered charts, so only enable
+        # selection when density is off
+        if show_density:
+            st.altair_chart(chart, key="alt_chart", width="stretch")
+            st.caption("Note: Point selection is disabled when density heatmap is shown.")
+        else:
+            event = st.altair_chart(chart, key="alt_chart", on_select="rerun", width="stretch")
 
-        # Handle updated event format
-        if (
-            event
-            and "selection" in event
-            and "point_selection" in event["selection"]
-            and event["selection"]["point_selection"]
-        ):
-            new_idx = int(event["selection"]["point_selection"][0]["idx"])
-            st.session_state["selected_image_idx"] = new_idx
+            # Handle updated event format
+            if (
+                event
+                and "selection" in event
+                and "point_selection" in event["selection"]
+                and event["selection"]["point_selection"]
+            ):
+                new_idx = int(event["selection"]["point_selection"][0]["idx"])
+                st.session_state["selected_image_idx"] = new_idx
 
     else:
         st.info("Run clustering to see the cluster scatter plot.")

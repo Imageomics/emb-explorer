@@ -74,29 +74,39 @@ def render_scatter_plot():
             chart = scatter
 
         # Apply common properties and interactivity
+        title_suffix = " (scroll to zoom, drag to pan)"
+        if not show_density:
+            title_suffix += ", click to select"
+
         chart = (
             chart
             .properties(
                 width=800,
                 height=700,
-                title="Embedding Clusters (scroll to zoom, drag to pan, click to select)"
+                title="Embedding Clusters" + title_suffix
             )
             .interactive()
         )
 
-        event = st.altair_chart(chart, key="alt_chart", on_select="rerun", width="stretch")
+        # Streamlit doesn't support selections on layered charts, so only enable
+        # selection when density is off
+        if show_density:
+            st.altair_chart(chart, key="alt_chart", width="stretch")
+            st.caption("Note: Point selection is disabled when density heatmap is shown.")
+        else:
+            event = st.altair_chart(chart, key="alt_chart", on_select="rerun", width="stretch")
 
-        # Handle selection - track data version to ensure selection is tied to current data
-        if (
-            event
-            and "selection" in event
-            and "point_selection" in event["selection"]
-            and event["selection"]["point_selection"]
-        ):
-            new_idx = int(event["selection"]["point_selection"][0]["idx"])
-            st.session_state["selected_image_idx"] = new_idx
-            # Store the data version when this selection was made
-            st.session_state["selection_data_version"] = st.session_state.get("data_version", None)
+            # Handle selection - track data version to ensure selection is tied to current data
+            if (
+                event
+                and "selection" in event
+                and "point_selection" in event["selection"]
+                and event["selection"]["point_selection"]
+            ):
+                new_idx = int(event["selection"]["point_selection"][0]["idx"])
+                st.session_state["selected_image_idx"] = new_idx
+                # Store the data version when this selection was made
+                st.session_state["selection_data_version"] = st.session_state.get("data_version", None)
 
     else:
         st.info("Run clustering to see the visualization.")
