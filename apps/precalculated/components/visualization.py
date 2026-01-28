@@ -12,6 +12,15 @@ def render_scatter_plot():
     labels = st.session_state.get("labels", None)
 
     if df_plot is not None and len(df_plot) > 1:
+        # Plot options
+        show_density = st.checkbox(
+            "Show density heatmap",
+            value=st.session_state.get("show_density", False),
+            key="density_toggle",
+            help="Overlay density heatmap to visualize point concentration"
+        )
+        st.session_state["show_density"] = show_density
+
         point_selector = alt.selection_point(fields=["idx"], name="point_selection")
 
         # Build tooltip fields dynamically from available columns
@@ -30,26 +39,52 @@ def render_scatter_plot():
         metadata_cols = [c for c in df_plot.columns if c not in skip_cols][:8]
         tooltip_fields.extend(metadata_cols)
 
+        # Create scatter plot
         scatter = (
             alt.Chart(df_plot)
-            .mark_circle(size=60)
+            .mark_circle(size=60, opacity=0.5 if show_density else 0.7)
             .encode(
-                x=alt.X('x', scale=alt.Scale(zero=False)),
-                y=alt.Y('y', scale=alt.Scale(zero=False)),
+                x=alt.X('x:Q', scale=alt.Scale(zero=False)),
+                y=alt.Y('y:Q', scale=alt.Scale(zero=False)),
                 color=alt.Color('cluster:N', legend=alt.Legend(title="Cluster")),
                 tooltip=tooltip_fields,
                 fillOpacity=alt.condition(point_selector, alt.value(1), alt.value(0.3))
             )
             .add_params(point_selector)
+        )
+
+        if show_density:
+            # Create 2D density heatmap layer
+            density = (
+                alt.Chart(df_plot)
+                .mark_rect(opacity=0.4)
+                .encode(
+                    x=alt.X('x:Q', bin=alt.Bin(maxbins=40), scale=alt.Scale(zero=False)),
+                    y=alt.Y('y:Q', bin=alt.Bin(maxbins=40), scale=alt.Scale(zero=False)),
+                    color=alt.Color(
+                        'count():Q',
+                        scale=alt.Scale(scheme='blues'),
+                        legend=None
+                    )
+                )
+            )
+            # Layer density behind scatter
+            chart = alt.layer(density, scatter)
+        else:
+            chart = scatter
+
+        # Apply common properties and interactivity
+        chart = (
+            chart
             .properties(
                 width=800,
                 height=700,
                 title="Embedding Clusters (scroll to zoom, drag to pan, click to select)"
             )
-            .interactive()  # Enable zoom/pan
+            .interactive()
         )
 
-        event = st.altair_chart(scatter, key="alt_chart", on_select="rerun", width="stretch")
+        event = st.altair_chart(chart, key="alt_chart", on_select="rerun", width="stretch")
 
         # Handle selection - track data version to ensure selection is tied to current data
         if (
