@@ -60,8 +60,9 @@ def render_scatter_plot():
             .properties(
                 width=800,
                 height=700,
-                title=title
+                title=title + " (scroll to zoom, drag to pan)"
             )
+            .interactive()  # Enable zoom/pan
         )
         event = st.altair_chart(scatter, key="alt_chart", on_select="rerun", width="stretch")
 

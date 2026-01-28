@@ -44,8 +44,9 @@ def render_scatter_plot():
             .properties(
                 width=800,
                 height=700,
-                title="Embedding Clusters (click a point to view details)"
+                title="Embedding Clusters (scroll to zoom, drag to pan, click to select)"
             )
+            .interactive()  # Enable zoom/pan
         )
 
         event = st.altair_chart(scatter, key="alt_chart", on_select="rerun", width="stretch")
