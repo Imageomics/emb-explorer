@@ -1,16 +1,23 @@
 from typing import Optional, Tuple
+import time
 import numpy as np
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 from umap import UMAP
 
+from shared.utils.logging_config import get_logger
+
+logger = get_logger(__name__)
+
 # Optional FAISS support for faster clustering
 try:
     import faiss
     HAS_FAISS = True
+    logger.debug("FAISS available")
 except ImportError:
     HAS_FAISS = False
+    logger.debug("FAISS not available")
 
 # Optional cuML support for GPU acceleration
 try:
@@ -21,8 +28,10 @@ try:
     from cuml.manifold import UMAP as cuUMAP
     import cupy as cp
     HAS_CUML = True
+    logger.debug("cuML available")
 except ImportError:
     HAS_CUML = False
+    logger.debug("cuML not available")
 
 # Check for CUDA availability
 try:
@@ -34,6 +43,8 @@ except ImportError:
         HAS_CUDA = cp.cuda.is_available()
     except ImportError:
         HAS_CUDA = False
+
+logger.debug(f"CUDA available: {HAS_CUDA}")
 
 
 class VRAMExceededError(Exception):
@@ -143,18 +154,28 @@ def reduce_dim(embeddings: np.ndarray, method: str = "PCA", seed: Optional[int] 
     Raises:
         ValueError: If an unsupported method is provided.
     """
+    n_samples, n_features = embeddings.shape
+    logger.info(f"Dimensionality reduction: method={method}, samples={n_samples}, features={n_features}, backend={backend}")
+
     # Determine which backend to use
     use_cuml = False
     if backend == "cuml" and HAS_CUML and HAS_CUDA:
         use_cuml = True
-    elif backend == "auto" and HAS_CUML and HAS_CUDA and embeddings.shape[0] > 5000:
+    elif backend == "auto" and HAS_CUML and HAS_CUDA and n_samples > 5000:
         # Use cuML automatically for large datasets on GPU
         use_cuml = True
-    
+
+    start_time = time.time()
     if use_cuml:
-        return _reduce_dim_cuml(embeddings, method, seed, n_workers)
+        logger.info(f"Using cuML backend for {method}")
+        result = _reduce_dim_cuml(embeddings, method, seed, n_workers)
     else:
-        return _reduce_dim_sklearn(embeddings, method, seed, n_workers)
+        logger.info(f"Using sklearn backend for {method}")
+        result = _reduce_dim_sklearn(embeddings, method, seed, n_workers)
+
+    elapsed = time.time() - start_time
+    logger.info(f"Dimensionality reduction completed in {elapsed:.2f}s")
+    return result
 
 
 def _reduce_dim_sklearn(embeddings: np.ndarray, method: str, seed: Optional[int], n_workers: int):
@@ -227,12 +248,12 @@ def _reduce_dim_cuml(embeddings: np.ndarray, method: str, seed: Optional[int], n
         # Handle CUDA architecture mismatch (e.g., V100 not supported by pip wheels)
         error_msg = str(e).lower()
         if "no kernel image" in error_msg or "cudaerrornokernel" in error_msg:
-            print(f"cuML {method} not supported on this GPU architecture, falling back to sklearn")
+            logger.warning(f"cuML {method} not supported on this GPU architecture, falling back to sklearn")
         else:
-            print(f"cuML reduction failed ({e}), falling back to sklearn")
+            logger.warning(f"cuML reduction failed ({e}), falling back to sklearn")
         return _reduce_dim_sklearn(embeddings, method, seed, n_workers)
     except Exception as e:
-        print(f"cuML reduction failed ({e}), falling back to sklearn")
+        logger.warning(f"cuML reduction failed ({e}), falling back to sklearn")
         return _reduce_dim_sklearn(embeddings, method, seed, n_workers)
 
 def run_kmeans(embeddings: np.ndarray, n_clusters: int, seed: Optional[int] = None, n_workers: int = 1, backend: str = "auto"):
@@ -250,21 +271,36 @@ def run_kmeans(embeddings: np.ndarray, n_clusters: int, seed: Optional[int] = No
         kmeans (KMeans or custom object): The fitted clustering object.
         labels (np.ndarray): Cluster labels for each sample.
     """
+    n_samples = embeddings.shape[0]
+    logger.info(f"KMeans clustering: n_clusters={n_clusters}, samples={n_samples}, backend={backend}")
+
+    start_time = time.time()
+
     # Determine which backend to use
     if backend == "cuml" and HAS_CUML and HAS_CUDA:
-        return _run_kmeans_cuml(embeddings, n_clusters, seed, n_workers)
+        logger.info("Using cuML backend for KMeans")
+        result = _run_kmeans_cuml(embeddings, n_clusters, seed, n_workers)
     elif backend == "faiss" and HAS_FAISS:
-        return _run_kmeans_faiss(embeddings, n_clusters, seed, n_workers)
+        logger.info("Using FAISS backend for KMeans")
+        result = _run_kmeans_faiss(embeddings, n_clusters, seed, n_workers)
     elif backend == "auto":
         # Auto selection priority: cuML > FAISS > sklearn
-        if HAS_CUML and HAS_CUDA and embeddings.shape[0] > 500:
-            return _run_kmeans_cuml(embeddings, n_clusters, seed, n_workers)
-        elif HAS_FAISS and embeddings.shape[0] > 500:
-            return _run_kmeans_faiss(embeddings, n_clusters, seed, n_workers)
+        if HAS_CUML and HAS_CUDA and n_samples > 500:
+            logger.info("Auto-selected cuML backend for KMeans (GPU available, large dataset)")
+            result = _run_kmeans_cuml(embeddings, n_clusters, seed, n_workers)
+        elif HAS_FAISS and n_samples > 500:
+            logger.info("Auto-selected FAISS backend for KMeans (large dataset)")
+            result = _run_kmeans_faiss(embeddings, n_clusters, seed, n_workers)
         else:
-            return _run_kmeans_sklearn(embeddings, n_clusters, seed)
+            logger.info("Using sklearn backend for KMeans")
+            result = _run_kmeans_sklearn(embeddings, n_clusters, seed)
     else:
-        return _run_kmeans_sklearn(embeddings, n_clusters, seed)
+        logger.info("Using sklearn backend for KMeans")
+        result = _run_kmeans_sklearn(embeddings, n_clusters, seed)
+
+    elapsed = time.time() - start_time
+    logger.info(f"KMeans clustering completed in {elapsed:.2f}s")
+    return result
 
 
 def _run_kmeans_cuml(embeddings: np.ndarray, n_clusters: int, seed: Optional[int] = None, n_workers: int = 1):
@@ -307,7 +343,7 @@ def _run_kmeans_cuml(embeddings: np.ndarray, n_clusters: int, seed: Optional[int
         return cuMLKMeans(centroids, labels), labels
         
     except Exception as e:
-        print(f"cuML clustering failed ({e}), falling back to sklearn")
+        logger.warning(f"cuML clustering failed ({e}), falling back to sklearn")
         return _run_kmeans_sklearn(embeddings, n_clusters, seed)
 
 
@@ -369,7 +405,7 @@ def _run_kmeans_faiss(embeddings: np.ndarray, n_clusters: int, seed: Optional[in
         
     except Exception as e:
         # Fallback to sklearn if FAISS fails
-        print(f"FAISS clustering failed ({e}), falling back to sklearn")
+        logger.warning(f"FAISS clustering failed ({e}), falling back to sklearn")
         return _run_kmeans_sklearn(embeddings, n_clusters, seed)
 
 

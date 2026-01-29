@@ -122,7 +122,7 @@ def render_data_preview():
             st.dataframe(
                 metadata_df,
                 hide_index=True,
-                use_container_width=True,
+                width="stretch",
                 column_config={
                     "Field": st.column_config.TextColumn("Field", width="small"),
                     "Value": st.column_config.TextColumn("Value", width="large"),

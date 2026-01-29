@@ -6,11 +6,15 @@ import torch
 import numpy as np
 import open_clip
 import streamlit as st
+import time
 from typing import Tuple, List, Optional, Callable
 
 from shared.utils.io import list_image_files
 from shared.utils.models import list_available_models
+from shared.utils.logging_config import get_logger
 from hpc_inference.datasets.image_folder_dataset import ImageFolderDataset
+
+logger = get_logger(__name__)
 
 
 class EmbeddingService:
@@ -53,11 +57,17 @@ class EmbeddingService:
         """Unified model loading function that handles all model types."""
         model_name, pretrained = EmbeddingService.parse_model_selection(selected_model)
 
+        logger.info(f"Loading model: {model_name} (pretrained={pretrained}) on device={device}")
+        start_time = time.time()
+
         model, _, preprocess = open_clip.create_model_and_transforms(
             model_name, pretrained=pretrained, device=device
         )
 
         model = torch.compile(model.to(device))
+
+        elapsed = time.time() - start_time
+        logger.info(f"Model loaded in {elapsed:.2f}s")
         return model, preprocess
 
     @staticmethod
@@ -82,15 +92,21 @@ class EmbeddingService:
         Returns:
             Tuple of (embeddings array, list of valid image paths)
         """
+        logger.info(f"Starting embedding generation: dir={image_dir}, model={model_name}, "
+                    f"batch_size={batch_size}, n_workers={n_workers}")
+        total_start = time.time()
+
         if progress_callback:
             progress_callback(0.0, "Listing images...")
 
         image_paths = list_image_files(image_dir)
+        logger.info(f"Found {len(image_paths)} images in {image_dir}")
 
         if progress_callback:
             progress_callback(0.1, f"Found {len(image_paths)} images. Loading model...")
 
         torch_device = "cuda" if torch.cuda.is_available() else "cpu"
+        logger.info(f"Using device: {torch_device}")
         model, preprocess = EmbeddingService.load_model_unified(model_name, torch_device)
 
         if progress_callback:
@@ -138,5 +154,9 @@ class EmbeddingService:
 
         if progress_callback:
             progress_callback(1.0, f"Complete! Generated {embeddings.shape[0]} embeddings")
+
+        total_elapsed = time.time() - total_start
+        logger.info(f"Embedding generation completed: {embeddings.shape[0]} embeddings in {total_elapsed:.2f}s "
+                    f"({embeddings.shape[0] / total_elapsed:.1f} images/sec)")
 
         return embeddings, valid_paths

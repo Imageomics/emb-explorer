@@ -5,9 +5,13 @@ Clustering service.
 import numpy as np
 import pandas as pd
 import os
+import time
 from typing import Tuple, Dict, List, Any
 
 from shared.utils.clustering import run_kmeans, reduce_dim
+from shared.utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 class ClusteringService:
@@ -40,7 +44,14 @@ class ClusteringService:
         Returns:
             Tuple of (cluster dataframe, cluster labels)
         """
+        logger.info(f"Starting clustering workflow: n_samples={len(embeddings)}, n_clusters={n_clusters}, "
+                    f"reduction={reduction_method}, dim_backend={dim_reduction_backend}, "
+                    f"clustering_backend={clustering_backend}")
+
+        total_start = time.time()
+
         # Step 1: Perform K-means clustering on full high-dimensional embeddings
+        logger.info("Step 1/2: Running KMeans clustering on high-dimensional embeddings")
         kmeans, labels = run_kmeans(
             embeddings,  # Use original high-dimensional embeddings for clustering
             int(n_clusters),
@@ -50,6 +61,7 @@ class ClusteringService:
         )
 
         # Step 2: Reduce dimensionality to 2D for visualization only
+        logger.info("Step 2/2: Reducing dimensionality to 2D for visualization")
         reduced = reduce_dim(
             embeddings,
             reduction_method,
@@ -66,6 +78,9 @@ class ClusteringService:
             "file_name": [os.path.basename(p) for p in valid_paths],
             "idx": range(len(valid_paths))
         })
+
+        total_elapsed = time.time() - total_start
+        logger.info(f"Clustering workflow completed in {total_elapsed:.2f}s")
 
         return df_plot, labels
 
@@ -86,7 +101,9 @@ class ClusteringService:
         Returns:
             Tuple of (summary dataframe, representatives dict)
         """
+        logger.info("Generating clustering summary statistics")
         cluster_ids = np.unique(labels)
+        logger.debug(f"Found {len(cluster_ids)} unique clusters")
         summary_data = []
         representatives = {}
 

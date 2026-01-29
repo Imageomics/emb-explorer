@@ -3,11 +3,15 @@ File operations service.
 """
 
 import os
+import time
 import pandas as pd
 import concurrent.futures
 from typing import List, Dict, Any, Optional, Callable, Tuple
 
 from shared.utils.io import copy_image
+from shared.utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 class FileService:
@@ -32,6 +36,9 @@ class FileService:
         Returns:
             Tuple of (summary dataframe, csv path)
         """
+        logger.info(f"Saving {len(cluster_rows)} cluster images to {save_dir}")
+        start_time = time.time()
+
         os.makedirs(save_dir, exist_ok=True)
         save_rows = []
 
@@ -60,6 +67,9 @@ class FileService:
         csv_path = os.path.join(save_dir, "saved_cluster_summary.csv")
         save_summary_df.to_csv(csv_path, index=False)
 
+        elapsed = time.time() - start_time
+        logger.info(f"Saved {len(save_rows)} images in {elapsed:.2f}s")
+
         return save_summary_df, csv_path
 
     @staticmethod
@@ -81,6 +91,9 @@ class FileService:
         Returns:
             Tuple of (summary dataframe, csv path)
         """
+        logger.info(f"Repartitioning {len(df_plot)} images by cluster to {repartition_dir}")
+        start_time = time.time()
+
         os.makedirs(repartition_dir, exist_ok=True)
         repartition_rows = []
 
@@ -107,5 +120,8 @@ class FileService:
         repartition_summary_df = pd.DataFrame(repartition_rows)
         csv_path = os.path.join(repartition_dir, "cluster_summary.csv")
         repartition_summary_df.to_csv(csv_path, index=False)
+
+        elapsed = time.time() - start_time
+        logger.info(f"Repartitioned {len(repartition_rows)} images in {elapsed:.2f}s")
 
         return repartition_summary_df, csv_path
