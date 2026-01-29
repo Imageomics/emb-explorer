@@ -90,19 +90,16 @@ def render_data_preview():
                     st.image(image, width=280)
                     break
 
-        # Build metadata table
-        skip_fields = {'emb', 'embedding', 'embeddings', 'vector', 'idx'}
+        # Display Cluster and UUID prominently (not in table)
+        st.markdown(f"**Cluster:** `{cluster_display}`")
+        st.markdown(f"**UUID:** `{selected_uuid}`")
 
-        # Collect all metadata as rows
+        # Build metadata table for remaining fields
+        skip_fields = {'emb', 'embedding', 'embeddings', 'vector', 'idx', 'uuid', 'cluster', 'cluster_name'}
+
         metadata_rows = []
-
-        # Always show cluster and UUID first
-        metadata_rows.append({"Field": "Cluster", "Value": str(cluster_display)})
-        metadata_rows.append({"Field": "UUID", "Value": str(selected_uuid)})
-
-        # Add remaining fields
         for field, value in record.items():
-            if field.lower() in skip_fields or field in ['uuid', 'cluster', 'cluster_name']:
+            if field.lower() in skip_fields or field in skip_fields:
                 continue
             if pd.isna(value):
                 continue
@@ -117,8 +114,10 @@ def render_data_preview():
 
             metadata_rows.append({"Field": field, "Value": display_val})
 
-        # Display as table with full values
+        # Display remaining metadata as table
         if metadata_rows:
+            st.markdown("---")
+            st.markdown("**📊 Metadata**")
             metadata_df = pd.DataFrame(metadata_rows)
             st.dataframe(
                 metadata_df,
