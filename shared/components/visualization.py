@@ -4,8 +4,6 @@ Shared visualization components for scatter plots.
 
 import streamlit as st
 import altair as alt
-import os
-from typing import Optional
 
 
 def render_scatter_plot():
