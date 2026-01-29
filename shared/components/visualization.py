@@ -50,22 +50,15 @@ def render_scatter_plot():
         # Use cluster_name for display if available (taxonomic clustering), otherwise use cluster
         if 'cluster_name' in df_plot.columns:
             tooltip_fields.append('cluster_name:N')
-            cluster_legend_field = 'cluster_name:N'
             cluster_legend_title = "Cluster"
         else:
             tooltip_fields.append('cluster:N')
-            cluster_legend_field = 'cluster:N'
             cluster_legend_title = "Cluster"
 
-        # Add metadata fields if available (for precalculated embeddings)
-        metadata_fields = ['scientific_name', 'common_name', 'family', 'genus', 'species', 'uuid']
-        for field in metadata_fields:
-            if field in df_plot.columns:
-                tooltip_fields.append(field)
-
-        # Add file_name if available (for image clustering)
-        if 'file_name' in df_plot.columns:
-            tooltip_fields.append('file_name')
+        # Add other metadata columns dynamically (limit to prevent tooltip overflow)
+        skip_cols = {'x', 'y', 'cluster', 'cluster_name', 'idx', 'emb', 'embedding', 'embeddings', 'vector'}
+        metadata_cols = [c for c in df_plot.columns if c not in skip_cols][:8]
+        tooltip_fields.extend(metadata_cols)
 
         # Determine title based on data type
         if 'uuid' in df_plot.columns:
@@ -147,6 +140,8 @@ def render_scatter_plot():
             ):
                 new_idx = int(event["selection"]["point_selection"][0]["idx"])
                 st.session_state["selected_image_idx"] = new_idx
+                # Store the data version when this selection was made (for apps that track it)
+                st.session_state["selection_data_version"] = st.session_state.get("data_version", None)
 
     else:
         st.info("Run clustering to see the cluster scatter plot.")

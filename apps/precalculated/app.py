@@ -12,8 +12,8 @@ from apps.precalculated.components.sidebar import (
     render_dynamic_filters,
     render_clustering_section,
 )
-from apps.precalculated.components.visualization import render_scatter_plot
 from apps.precalculated.components.data_preview import render_data_preview
+from shared.components.visualization import render_scatter_plot
 from shared.components.summary import render_clustering_summary
 
 
