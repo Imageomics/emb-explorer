@@ -6,9 +6,14 @@ Dynamically displays all available metadata fields.
 import streamlit as st
 import pandas as pd
 import requests
+import time
 from typing import Optional
 from PIL import Image
 from io import BytesIO
+
+from shared.utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 @st.cache_data(ttl=300, show_spinner=False)
@@ -19,18 +24,34 @@ def fetch_image_from_url(url: str, timeout: int = 5) -> Optional[bytes]:
 
     try:
         if not url.startswith(('http://', 'https://')):
+            logger.debug(f"Invalid URL scheme: {url[:50]}...")
             return None
+
+        logger.debug(f"Fetching image from URL: {url[:80]}...")
+        start_time = time.time()
 
         response = requests.get(url, timeout=timeout, stream=True)
         response.raise_for_status()
 
         content_type = response.headers.get('content-type', '').lower()
         if not content_type.startswith('image/'):
+            logger.warning(f"URL returned non-image content-type: {content_type}")
             return None
+
+        elapsed = time.time() - start_time
+        content_length = len(response.content)
+        logger.info(f"Image fetched: {content_length/1024:.1f}KB in {elapsed:.2f}s from {url[:50]}...")
 
         return response.content
 
-    except Exception:
+    except requests.exceptions.Timeout:
+        logger.warning(f"Image fetch timeout: {url[:50]}...")
+        return None
+    except requests.exceptions.RequestException as e:
+        logger.warning(f"Image fetch failed: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"Unexpected error fetching image: {e}")
         return None
 
 
@@ -38,7 +59,11 @@ def get_image_from_url(url: str) -> Optional[Image.Image]:
     """Get image from URL with caching."""
     image_bytes = fetch_image_from_url(url)
     if image_bytes:
-        return Image.open(BytesIO(image_bytes))
+        try:
+            return Image.open(BytesIO(image_bytes))
+        except Exception as e:
+            logger.error(f"Failed to open image: {e}")
+            return None
     return None
 
 

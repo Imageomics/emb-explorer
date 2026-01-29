@@ -5,6 +5,10 @@ Image preview component for the embed_explore application.
 import streamlit as st
 import os
 
+from shared.utils.logging_config import get_logger
+
+logger = get_logger(__name__)
+
 
 def render_image_preview():
     """Render the image preview panel for local image files."""
@@ -20,6 +24,9 @@ def render_image_preview():
     ):
         img_path = valid_paths[selected_idx]
         cluster = labels[selected_idx] if labels is not None else "?"
+
+        logger.debug(f"Displaying image preview: idx={selected_idx}, cluster={cluster}, path={img_path}")
+
         st.image(img_path, caption=f"Cluster {cluster}: {os.path.basename(img_path)}", width='stretch')
         st.markdown(f"**File:** `{os.path.basename(img_path)}`")
         st.markdown(f"**Cluster:** `{cluster}`")

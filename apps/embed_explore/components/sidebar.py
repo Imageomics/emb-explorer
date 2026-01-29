@@ -156,6 +156,16 @@ def run_clustering_with_fallback(
         st.session_state.data = df_plot
         st.session_state.labels = labels
         st.session_state.selected_image_idx = 0
+
+        # Compute and store clustering summary (only on clustering action)
+        logger.info("Computing clustering summary statistics...")
+        summary_df, representatives = ClusteringService.generate_clustering_summary(
+            embeddings, labels, df_plot
+        )
+        st.session_state.clustering_summary = summary_df
+        st.session_state.clustering_representatives = representatives
+        logger.info(f"Clustering summary computed: {len(summary_df)} clusters")
+
         st.success(f"Clustering complete! Found {n_clusters} clusters.")
 
     except (RuntimeError, OSError) as e:
@@ -180,6 +190,16 @@ def run_clustering_with_fallback(
                 st.session_state.data = df_plot
                 st.session_state.labels = labels
                 st.session_state.selected_image_idx = 0
+
+                # Compute and store clustering summary (only on clustering action)
+                logger.info("Computing clustering summary statistics (fallback)...")
+                summary_df, representatives = ClusteringService.generate_clustering_summary(
+                    embeddings, labels, df_plot
+                )
+                st.session_state.clustering_summary = summary_df
+                st.session_state.clustering_representatives = representatives
+                logger.info(f"Clustering summary computed: {len(summary_df)} clusters")
+
                 st.success(f"Clustering complete! Found {n_clusters} clusters. (CPU fallback)")
 
             except Exception as fallback_error:
