@@ -78,11 +78,7 @@ def render_data_preview():
         # Find the full record
         record = filtered_df[filtered_df['uuid'] == selected_uuid].iloc[0]
 
-        st.markdown(f"### 📋 Record Details")
-
-        # Basic info
-        st.markdown(f"**Cluster:** `{cluster_display}`")
-        st.markdown(f"**UUID:** `{selected_uuid[:20]}...`" if len(str(selected_uuid)) > 20 else f"**UUID:** `{selected_uuid}`")
+        st.markdown("### 📋 Record Details")
 
         # Try to display image if identifier/url column exists (cached to prevent re-fetch)
         image_cols = ['identifier', 'image_url', 'url', 'img_url', 'image']
@@ -94,17 +90,19 @@ def render_data_preview():
                     st.image(image, width=280)
                     break
 
-        # Dynamic field display
-        st.markdown("---")
-        st.markdown("**📊 Metadata**")
+        # Build metadata table
+        skip_fields = {'emb', 'embedding', 'embeddings', 'vector', 'idx'}
 
-        # Exclude technical fields
-        skip_fields = {'uuid', 'emb', 'embedding', 'embeddings', 'vector', 'idx'}
+        # Collect all metadata as rows
+        metadata_rows = []
 
-        # Group fields by type for better display
-        displayed = 0
+        # Always show cluster and UUID first
+        metadata_rows.append({"Field": "Cluster", "Value": str(cluster_display)})
+        metadata_rows.append({"Field": "UUID", "Value": str(selected_uuid)})
+
+        # Add remaining fields
         for field, value in record.items():
-            if field.lower() in skip_fields:
+            if field.lower() in skip_fields or field in ['uuid', 'cluster', 'cluster_name']:
                 continue
             if pd.isna(value):
                 continue
@@ -116,18 +114,21 @@ def render_data_preview():
                 display_val = f"[{len(value)} items]"
             else:
                 display_val = str(value)
-                if len(display_val) > 60:
-                    display_val = display_val[:57] + "..."
 
-            st.markdown(f"**{field}:** {display_val}")
-            displayed += 1
+            metadata_rows.append({"Field": field, "Value": display_val})
 
-            if displayed >= 15:  # Limit display
-                with st.expander(f"Show all {len(record) - len(skip_fields)} fields"):
-                    for f, v in record.items():
-                        if f.lower() not in skip_fields and pd.notna(v):
-                            st.text(f"{f}: {v}")
-                break
+        # Display as table with full values
+        if metadata_rows:
+            metadata_df = pd.DataFrame(metadata_rows)
+            st.dataframe(
+                metadata_df,
+                hide_index=True,
+                use_container_width=True,
+                column_config={
+                    "Field": st.column_config.TextColumn("Field", width="small"),
+                    "Value": st.column_config.TextColumn("Value", width="large"),
+                }
+            )
 
     else:
         # Show appropriate message based on state

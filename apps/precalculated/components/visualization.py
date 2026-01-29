@@ -12,15 +12,32 @@ def render_scatter_plot():
     labels = st.session_state.get("labels", None)
 
     if df_plot is not None and len(df_plot) > 1:
-        # Plot options
-        density_mode = st.radio(
-            "Density visualization",
-            options=["Off", "Opacity", "Heatmap"],
-            index=0,
-            horizontal=True,
-            key="density_mode",
-            help="Off: normal view | Opacity: lower opacity to show overlap | Heatmap: 2D binned density (disables selection)"
-        )
+        # Plot options in columns for compact layout
+        opt_col1, opt_col2 = st.columns([2, 1])
+
+        with opt_col1:
+            density_mode = st.radio(
+                "Density visualization",
+                options=["Off", "Opacity", "Heatmap"],
+                index=0,
+                horizontal=True,
+                key="density_mode",
+                help="Off: normal view | Opacity: lower opacity to show overlap | Heatmap: 2D binned density (disables selection)"
+            )
+
+        with opt_col2:
+            if density_mode == "Heatmap":
+                heatmap_bins = st.slider(
+                    "Grid resolution",
+                    min_value=10,
+                    max_value=80,
+                    value=40,
+                    step=5,
+                    key="heatmap_bins",
+                    help="Number of bins for density grid (higher = finer detail)"
+                )
+            else:
+                heatmap_bins = 40  # Default, not used
 
         point_selector = alt.selection_point(fields=["idx"], name="point_selection")
 
@@ -63,13 +80,13 @@ def render_scatter_plot():
         )
 
         if density_mode == "Heatmap":
-            # Create 2D density heatmap layer
+            # Create 2D density heatmap layer with configurable bins
             density = (
                 alt.Chart(df_plot)
                 .mark_rect(opacity=0.4)
                 .encode(
-                    x=alt.X('x:Q', bin=alt.Bin(maxbins=40), scale=alt.Scale(zero=False)),
-                    y=alt.Y('y:Q', bin=alt.Bin(maxbins=40), scale=alt.Scale(zero=False)),
+                    x=alt.X('x:Q', bin=alt.Bin(maxbins=heatmap_bins), scale=alt.Scale(zero=False)),
+                    y=alt.Y('y:Q', bin=alt.Bin(maxbins=heatmap_bins), scale=alt.Scale(zero=False)),
                     color=alt.Color(
                         'count():Q',
                         scale=alt.Scale(scheme='blues'),
