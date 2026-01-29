@@ -16,6 +16,10 @@ from typing import Dict, Any, Optional, Tuple, List
 
 from shared.services.clustering_service import ClusteringService
 from shared.components.clustering_controls import render_clustering_backend_controls
+from shared.utils.backend import check_cuda_available, resolve_backend, is_oom_error, is_cuda_arch_error, is_gpu_error
+from shared.utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 # Technical columns that should never be shown as filters
@@ -579,34 +583,6 @@ def render_clustering_section() -> Tuple[bool, int, str, str, str, int, Optional
         return cluster_button, n_clusters, reduction_method, dim_reduction_backend, clustering_backend, n_workers, seed
 
 
-def check_cuda_available() -> Tuple[bool, str]:
-    """Check if CUDA is available for cuML."""
-    try:
-        import torch
-        if torch.cuda.is_available():
-            device_name = torch.cuda.get_device_name(0)
-            return True, device_name
-    except ImportError:
-        pass
-
-    try:
-        import cupy as cp
-        if cp.cuda.is_available():
-            device = cp.cuda.Device(0)
-            return True, f"GPU {device.id}"
-    except ImportError:
-        pass
-
-    return False, "CPU only"
-
-
-def resolve_backend(backend: str, cuda_available: bool) -> str:
-    """Resolve 'auto' backend to actual backend."""
-    if backend == "auto":
-        return "cuml" if cuda_available else "sklearn"
-    return backend
-
-
 def run_clustering_with_error_handling(
     filtered_df: pd.DataFrame,
     n_clusters: int,
@@ -625,16 +601,16 @@ def run_clustering_with_error_handling(
         cuda_available, device_info = check_cuda_available()
 
         # Resolve auto backends
-        actual_dim_backend = resolve_backend(dim_reduction_backend, cuda_available)
-        actual_cluster_backend = resolve_backend(clustering_backend, cuda_available)
+        actual_dim_backend = resolve_backend(dim_reduction_backend, "reduction")
+        actual_cluster_backend = resolve_backend(clustering_backend, "clustering")
 
-        # Log to console
-        print("\n" + "=" * 60)
-        print("CLUSTERING LOG")
-        print("=" * 60)
-        print(f"Device: {device_info} (CUDA: {'Yes' if cuda_available else 'No'})")
-        print(f"Dim Reduction Backend: {actual_dim_backend} (requested: {dim_reduction_backend})")
-        print(f"Clustering Backend: {actual_cluster_backend} (requested: {clustering_backend})")
+        # Log clustering start
+        logger.info("=" * 60)
+        logger.info("CLUSTERING START")
+        logger.info("=" * 60)
+        logger.info(f"Device: {device_info} (CUDA: {'Yes' if cuda_available else 'No'})")
+        logger.info(f"Dim Reduction Backend: {actual_dim_backend} (requested: {dim_reduction_backend})")
+        logger.info(f"Clustering Backend: {actual_cluster_backend} (requested: {clustering_backend})")
 
         # Extract embeddings
         t_start = time.time()
@@ -646,9 +622,9 @@ def run_clustering_with_error_handling(
         n_samples, emb_dim = embeddings.shape
         mem_mb = (n_samples * emb_dim * 4) / (1024 * 1024)
 
-        print(f"Records: {n_samples:,} | Embedding dim: {emb_dim}")
-        print(f"Memory: ~{mem_mb:.1f} MB | Clusters: {n_clusters}")
-        print(f"[OK] Embeddings extracted ({t_extract:.2f}s)")
+        logger.info(f"Records: {n_samples:,} | Embedding dim: {emb_dim}")
+        logger.info(f"Memory: ~{mem_mb:.1f} MB | Clusters: {n_clusters}")
+        logger.info(f"Embeddings extracted ({t_extract:.2f}s)")
 
         # Run clustering with error handling
         t_cluster_start = time.time()
@@ -680,7 +656,7 @@ def run_clustering_with_error_handling(
 
                 # Handle CUDA architecture incompatibility
                 elif "no kernel image" in error_msg:
-                    print("[WARN] GPU arch incompatible, falling back to sklearn...")
+                    logger.warning("GPU arch incompatible, falling back to sklearn...")
                     df_plot, labels = ClusteringService.run_clustering(
                         embeddings, filtered_df['uuid'].tolist(), n_clusters,
                         reduction_method, n_workers, "sklearn", "sklearn", seed
@@ -688,7 +664,7 @@ def run_clustering_with_error_handling(
 
                 # Handle missing NVRTC library
                 elif "nvrtc" in error_msg or "libnvrtc" in error_msg:
-                    print("[WARN] CUDA runtime missing, falling back to sklearn...")
+                    logger.warning("CUDA runtime missing, falling back to sklearn...")
                     df_plot, labels = ClusteringService.run_clustering(
                         embeddings, filtered_df['uuid'].tolist(), n_clusters,
                         reduction_method, n_workers, "sklearn", "sklearn", seed
@@ -703,7 +679,7 @@ def run_clustering_with_error_handling(
 
             except OSError as e:
                 if "nvrtc" in str(e).lower() or "cuda" in str(e).lower():
-                    print("[WARN] CUDA library issue, falling back to sklearn...")
+                    logger.warning("CUDA library issue, falling back to sklearn...")
                     df_plot, labels = ClusteringService.run_clustering(
                         embeddings, filtered_df['uuid'].tolist(), n_clusters,
                         reduction_method, n_workers, "sklearn", "sklearn", seed
@@ -715,8 +691,8 @@ def run_clustering_with_error_handling(
         t_total = time.time() - t_start
 
         # Log clustering completion to console
-        print(f"[OK] {reduction_method} + KMeans completed ({t_cluster:.2f}s)")
-        print(f"Total time: {t_total:.2f}s")
+        logger.info(f"{reduction_method} + KMeans completed ({t_cluster:.2f}s)")
+        logger.info(f"Total time: {t_total:.2f}s")
 
         # Create enhanced plot dataframe
         df_plot = create_cluster_dataframe(filtered_df.reset_index(drop=True), df_plot[['x', 'y']].values, labels)
@@ -756,8 +732,8 @@ def run_clustering_with_error_handling(
         st.session_state.filtered_df_for_clustering = filtered_df.reset_index(drop=True)
 
         # Final log with success
-        print(f"[SUCCESS] {n_clusters} clusters found")
-        print("=" * 60 + "\n")
+        logger.info(f"Clustering complete: {n_clusters} clusters found")
+        logger.info("=" * 60)
 
         st.success(f"Clustering complete! {n_clusters} clusters found.")
 
