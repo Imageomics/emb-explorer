@@ -5,6 +5,10 @@ Shared visualization components for scatter plots.
 import streamlit as st
 import altair as alt
 
+from shared.utils.logging_config import get_logger
+
+logger = get_logger(__name__)
+
 
 def render_scatter_plot():
     """Render the main clustering scatter plot with dynamic tooltips."""
@@ -13,6 +17,9 @@ def render_scatter_plot():
     selected_idx = st.session_state.get("selected_image_idx", 0)
 
     if df_plot is not None and len(df_plot) > 1:
+        # Track previous density mode to detect changes
+        prev_density_mode = st.session_state.get("_prev_density_mode", None)
+
         # Plot options in columns for compact layout
         opt_col1, opt_col2 = st.columns([2, 1])
 
@@ -26,8 +33,14 @@ def render_scatter_plot():
                 help="Off: normal view | Opacity: lower opacity to show overlap | Heatmap: 2D binned density (disables selection)"
             )
 
+        # Log density mode change
+        if prev_density_mode != density_mode:
+            logger.info(f"[Visualization] Density mode changed: {prev_density_mode} -> {density_mode}")
+            st.session_state["_prev_density_mode"] = density_mode
+
         with opt_col2:
             if density_mode == "Heatmap":
+                prev_bins = st.session_state.get("_prev_heatmap_bins", 40)
                 heatmap_bins = st.slider(
                     "Grid resolution",
                     min_value=10,
@@ -37,6 +50,9 @@ def render_scatter_plot():
                     key="heatmap_bins",
                     help="Number of bins for density grid (higher = finer detail)"
                 )
+                if prev_bins != heatmap_bins:
+                    logger.info(f"[Visualization] Heatmap bins changed: {prev_bins} -> {heatmap_bins}")
+                    st.session_state["_prev_heatmap_bins"] = heatmap_bins
             else:
                 heatmap_bins = 40  # Default, not used
 
@@ -121,6 +137,10 @@ def render_scatter_plot():
             .interactive()  # Enable zoom/pan
         )
 
+        # Log chart render
+        logger.info(f"[Visualization] Rendering chart: {len(df_plot)} points, density={density_mode}, "
+                    f"bins={heatmap_bins if density_mode == 'Heatmap' else 'N/A'}")
+
         # Streamlit doesn't support selections on layered charts, so only enable
         # selection when not using heatmap mode
         if density_mode == "Heatmap":
@@ -137,6 +157,11 @@ def render_scatter_plot():
                 and event["selection"]["point_selection"]
             ):
                 new_idx = int(event["selection"]["point_selection"][0]["idx"])
+                prev_idx = st.session_state.get("selected_image_idx")
+                if prev_idx != new_idx:
+                    # Get cluster info for logging
+                    cluster = df_plot.iloc[new_idx]['cluster'] if 'cluster' in df_plot.columns else '?'
+                    logger.info(f"[Visualization] Point selected: idx={new_idx}, cluster={cluster}")
                 st.session_state["selected_image_idx"] = new_idx
                 # Store the data version when this selection was made (for apps that track it)
                 st.session_state["selection_data_version"] = st.session_state.get("data_version", None)

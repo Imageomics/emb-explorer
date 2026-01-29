@@ -9,9 +9,14 @@ from shared.utils.logging_config import get_logger
 
 logger = get_logger(__name__)
 
+# Track last displayed image to avoid duplicate logging
+_last_displayed_path = None
+
 
 def render_image_preview():
     """Render the image preview panel for local image files."""
+    global _last_displayed_path
+
     valid_paths = st.session_state.get("valid_paths", None)
     labels = st.session_state.get("labels", None)
     selected_idx = st.session_state.get("selected_image_idx", 0)
@@ -25,7 +30,10 @@ def render_image_preview():
         img_path = valid_paths[selected_idx]
         cluster = labels[selected_idx] if labels is not None else "?"
 
-        logger.debug(f"Displaying image preview: idx={selected_idx}, cluster={cluster}, path={img_path}")
+        # Log only when image changes
+        if _last_displayed_path != img_path:
+            logger.info(f"[Image] Loading local file: {os.path.basename(img_path)} (cluster={cluster})")
+            _last_displayed_path = img_path
 
         st.image(img_path, caption=f"Cluster {cluster}: {os.path.basename(img_path)}", width='stretch')
         st.markdown(f"**File:** `{os.path.basename(img_path)}`")

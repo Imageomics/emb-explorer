@@ -17,52 +17,64 @@ logger = get_logger(__name__)
 
 
 @st.cache_data(ttl=300, show_spinner=False)
-def fetch_image_from_url(url: str, timeout: int = 5) -> Optional[bytes]:
-    """Try to fetch an image from a URL. Returns bytes to be cacheable."""
+def _fetch_image_from_url_cached(url: str, timeout: int = 5) -> Optional[bytes]:
+    """Internal cached function to fetch image bytes."""
     if not url or not isinstance(url, str):
         return None
 
     try:
         if not url.startswith(('http://', 'https://')):
-            logger.debug(f"Invalid URL scheme: {url[:50]}...")
             return None
-
-        logger.debug(f"Fetching image from URL: {url[:80]}...")
-        start_time = time.time()
 
         response = requests.get(url, timeout=timeout, stream=True)
         response.raise_for_status()
 
         content_type = response.headers.get('content-type', '').lower()
         if not content_type.startswith('image/'):
-            logger.warning(f"URL returned non-image content-type: {content_type}")
             return None
-
-        elapsed = time.time() - start_time
-        content_length = len(response.content)
-        logger.info(f"Image fetched: {content_length/1024:.1f}KB in {elapsed:.2f}s from {url[:50]}...")
 
         return response.content
 
-    except requests.exceptions.Timeout:
-        logger.warning(f"Image fetch timeout: {url[:50]}...")
+    except Exception:
         return None
-    except requests.exceptions.RequestException as e:
-        logger.warning(f"Image fetch failed: {e}")
+
+
+def fetch_image_from_url(url: str, timeout: int = 5) -> Optional[bytes]:
+    """
+    Fetch an image from a URL with logging.
+    Uses caching internally but logs the request.
+    """
+    if not url or not isinstance(url, str):
         return None
-    except Exception as e:
-        logger.error(f"Unexpected error fetching image: {e}")
+
+    if not url.startswith(('http://', 'https://')):
+        logger.warning(f"[Image] Invalid URL scheme: {url[:50]}...")
         return None
+
+    logger.info(f"[Image] Fetching: {url[:80]}...")
+    start_time = time.time()
+
+    result = _fetch_image_from_url_cached(url, timeout)
+
+    elapsed = time.time() - start_time
+    if result:
+        logger.info(f"[Image] Loaded: {len(result)/1024:.1f}KB in {elapsed:.3f}s")
+    else:
+        logger.warning(f"[Image] Failed to load: {url[:50]}...")
+
+    return result
 
 
 def get_image_from_url(url: str) -> Optional[Image.Image]:
-    """Get image from URL with caching."""
+    """Get image from URL with caching and logging."""
     image_bytes = fetch_image_from_url(url)
     if image_bytes:
         try:
-            return Image.open(BytesIO(image_bytes))
+            image = Image.open(BytesIO(image_bytes))
+            logger.info(f"[Image] Opened: {image.size[0]}x{image.size[1]} {image.mode}")
+            return image
         except Exception as e:
-            logger.error(f"Failed to open image: {e}")
+            logger.error(f"[Image] Failed to open: {e}")
             return None
     return None
 
