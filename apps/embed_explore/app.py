@@ -9,7 +9,7 @@ import streamlit as st
 
 from apps.embed_explore.components.sidebar import render_clustering_sidebar
 from apps.embed_explore.components.image_preview import render_image_preview
-from apps.embed_explore.components.summary import render_clustering_summary
+from shared.components.summary import render_clustering_summary
 from shared.components.visualization import render_scatter_plot
 
 
