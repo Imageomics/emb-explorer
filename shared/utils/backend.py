@@ -3,8 +3,6 @@ Backend detection and resolution utilities.
 
 Provides consistent backend selection and CUDA availability checking
 across all applications.
-
-Uses lazy loading to avoid importing heavy libraries (torch, cuml, faiss) at startup.
 """
 
 from typing import Tuple, Optional
@@ -12,10 +10,8 @@ from shared.utils.logging_config import get_logger
 
 logger = get_logger(__name__)
 
-# Cache availability to avoid repeated checks (None = not checked yet)
+# Cache CUDA availability to avoid repeated checks
 _cuda_check_cache: Optional[Tuple[bool, str]] = None
-_cuml_check_cache: Optional[bool] = None
-_faiss_check_cache: Optional[bool] = None
 
 
 def check_cuda_available() -> Tuple[bool, str]:
@@ -59,35 +55,21 @@ def check_cuda_available() -> Tuple[bool, str]:
 
 
 def check_cuml_available() -> bool:
-    """Check if cuML is available (cached)."""
-    global _cuml_check_cache
-    if _cuml_check_cache is not None:
-        return _cuml_check_cache
-
+    """Check if cuML is available."""
     try:
         import cuml
-        _cuml_check_cache = True
-        logger.debug("cuML is available")
+        return True
     except ImportError:
-        _cuml_check_cache = False
-        logger.debug("cuML not available")
-    return _cuml_check_cache
+        return False
 
 
 def check_faiss_available() -> bool:
-    """Check if FAISS is available (cached)."""
-    global _faiss_check_cache
-    if _faiss_check_cache is not None:
-        return _faiss_check_cache
-
+    """Check if FAISS is available."""
     try:
         import faiss
-        _faiss_check_cache = True
-        logger.debug("FAISS is available")
+        return True
     except ImportError:
-        _faiss_check_cache = False
-        logger.debug("FAISS not available")
-    return _faiss_check_cache
+        return False
 
 
 def resolve_backend(backend: str, operation: str = "general") -> str:
