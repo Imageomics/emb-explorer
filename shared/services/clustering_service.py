@@ -6,9 +6,10 @@ import numpy as np
 import pandas as pd
 import os
 import time
-from typing import Tuple, Dict, List, Any
+from typing import Tuple, Dict, List, Any, Optional
 
 from shared.utils.clustering import run_kmeans, reduce_dim
+from shared.utils.backend import is_oom_error, is_cuda_arch_error, is_gpu_error
 from shared.utils.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -128,3 +129,56 @@ class ClusteringService:
 
         summary_df = pd.DataFrame(summary_data)
         return summary_df, representatives
+
+    @staticmethod
+    def run_clustering_safe(
+        embeddings: np.ndarray,
+        valid_paths: List[str],
+        n_clusters: int,
+        reduction_method: str,
+        n_workers: int = 1,
+        dim_reduction_backend: str = "auto",
+        clustering_backend: str = "auto",
+        seed: Optional[int] = None
+    ) -> Tuple[pd.DataFrame, np.ndarray]:
+        """
+        Run clustering with automatic GPU-to-CPU fallback on errors.
+
+        Handles CUDA architecture mismatches, missing NVRTC libraries, and
+        other GPU errors by transparently retrying with sklearn backends.
+
+        GPU OOM and system MemoryError are re-raised for the caller to
+        present appropriate UI.
+
+        Args:
+            embeddings: Input embeddings
+            valid_paths: List of identifiers (image paths or UUIDs)
+            n_clusters: Number of clusters
+            reduction_method: Dimensionality reduction method
+            n_workers: Number of workers for reduction
+            dim_reduction_backend: Backend for dimensionality reduction
+            clustering_backend: Backend for clustering
+            seed: Random seed for reproducibility
+
+        Returns:
+            Tuple of (cluster dataframe, cluster labels)
+
+        Raises:
+            MemoryError: System out of memory (unrecoverable)
+            RuntimeError: GPU OOM (caller should show user guidance)
+        """
+        try:
+            return ClusteringService.run_clustering(
+                embeddings, valid_paths, n_clusters, reduction_method,
+                n_workers, dim_reduction_backend, clustering_backend, seed
+            )
+        except (RuntimeError, OSError) as e:
+            if is_oom_error(e):
+                raise
+            if is_cuda_arch_error(e) or is_gpu_error(e):
+                logger.warning(f"GPU error ({e}), falling back to sklearn backends")
+                return ClusteringService.run_clustering(
+                    embeddings, valid_paths, n_clusters, reduction_method,
+                    n_workers, "sklearn", "sklearn", seed
+                )
+            raise

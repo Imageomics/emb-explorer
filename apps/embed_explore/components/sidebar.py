@@ -11,7 +11,7 @@ from shared.services.clustering_service import ClusteringService
 from shared.services.file_service import FileService
 from shared.lib.progress import StreamlitProgressContext
 from shared.components.clustering_controls import render_clustering_backend_controls, render_basic_clustering_controls
-from shared.utils.backend import check_cuda_available, resolve_backend, is_oom_error, is_cuda_arch_error, is_gpu_error
+from shared.utils.backend import check_cuda_available, resolve_backend, is_oom_error
 from shared.utils.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -79,6 +79,7 @@ def render_embedding_section() -> Tuple[bool, Optional[str], Optional[str], int,
 
                 except Exception as e:
                     st.error(f"Error during embedding: {e}")
+                    logger.exception("Embedding generation failed")
 
         elif embed_button:
             st.error("Please provide a valid image directory path.")
@@ -134,9 +135,9 @@ def run_clustering_with_fallback(
     """
     Run clustering with robust error handling and automatic fallbacks.
 
-    Handles GPU errors by falling back to CPU-based sklearn backend.
+    Uses ClusteringService.run_clustering_safe() which transparently
+    handles GPU errors by falling back to CPU-based sklearn backends.
     """
-    # Check CUDA availability and resolve backends
     cuda_available, device_info = check_cuda_available()
     actual_dim_backend = resolve_backend(dim_reduction_backend, "reduction")
     actual_cluster_backend = resolve_backend(clustering_backend, "clustering")
@@ -147,7 +148,7 @@ def run_clustering_with_fallback(
 
     try:
         with st.spinner(f"Running {reduction_method} + KMeans ({actual_dim_backend}/{actual_cluster_backend})..."):
-            df_plot, labels = ClusteringService.run_clustering(
+            df_plot, labels = ClusteringService.run_clustering_safe(
                 embeddings, valid_paths, n_clusters, reduction_method,
                 n_workers, actual_dim_backend, actual_cluster_backend, seed
             )
@@ -157,7 +158,7 @@ def run_clustering_with_fallback(
         st.session_state.labels = labels
         st.session_state.selected_image_idx = 0
 
-        # Compute and store clustering summary (only on clustering action)
+        # Compute and store clustering summary
         logger.info("Computing clustering summary statistics...")
         summary_df, representatives = ClusteringService.generate_clustering_summary(
             embeddings, labels, df_plot
@@ -169,57 +170,21 @@ def run_clustering_with_fallback(
         st.success(f"Clustering complete! Found {n_clusters} clusters.")
 
     except (RuntimeError, OSError) as e:
-        # Handle GPU-related errors with fallback
         if is_oom_error(e):
             st.error("**GPU Out of Memory** - Dataset too large for GPU")
             st.info("Try: Reduce dataset size, or select 'sklearn' backend")
-            logger.error(f"GPU OOM error: {e}")
-            return
-
-        if is_cuda_arch_error(e) or is_gpu_error(e):
-            logger.warning(f"GPU error ({e}), falling back to sklearn...")
-            st.warning("GPU unavailable, falling back to CPU...")
-
-            try:
-                with st.spinner(f"Running {reduction_method} + KMeans (sklearn/sklearn)..."):
-                    df_plot, labels = ClusteringService.run_clustering(
-                        embeddings, valid_paths, n_clusters, reduction_method,
-                        n_workers, "sklearn", "sklearn", seed
-                    )
-
-                st.session_state.data = df_plot
-                st.session_state.labels = labels
-                st.session_state.selected_image_idx = 0
-
-                # Compute and store clustering summary (only on clustering action)
-                logger.info("Computing clustering summary statistics (fallback)...")
-                summary_df, representatives = ClusteringService.generate_clustering_summary(
-                    embeddings, labels, df_plot
-                )
-                st.session_state.clustering_summary = summary_df
-                st.session_state.clustering_representatives = representatives
-                logger.info(f"Clustering summary computed: {len(summary_df)} clusters")
-
-                st.success(f"Clustering complete! Found {n_clusters} clusters. (CPU fallback)")
-
-            except Exception as fallback_error:
-                st.error(f"Error during clustering: {fallback_error}")
-                logger.error(f"Fallback clustering failed: {fallback_error}")
+            logger.exception("GPU OOM error during clustering")
         else:
             st.error(f"Error during clustering: {e}")
-            logger.error(f"Clustering error: {e}")
+            logger.exception("Clustering error")
 
     except MemoryError:
         st.error("**System Out of Memory** - Reduce dataset size")
-        logger.error("System memory exhausted")
+        logger.exception("System memory exhausted during clustering")
 
     except Exception as e:
-        if is_gpu_error(e):
-            st.error(f"GPU Error: {e}")
-            st.info("Try selecting 'sklearn' backend to use CPU instead")
-        else:
-            st.error(f"Error during clustering: {e}")
-        logger.error(f"Clustering error: {e}")
+        st.error(f"Error during clustering: {e}")
+        logger.exception("Unexpected clustering error")
 
 
 def render_save_section():

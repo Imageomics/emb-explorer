@@ -16,7 +16,7 @@ from typing import Dict, Any, Optional, Tuple, List
 
 from shared.services.clustering_service import ClusteringService
 from shared.components.clustering_controls import render_clustering_backend_controls
-from shared.utils.backend import check_cuda_available, resolve_backend, is_oom_error, is_cuda_arch_error, is_gpu_error
+from shared.utils.backend import check_cuda_available, resolve_backend, is_oom_error
 from shared.utils.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -155,32 +155,44 @@ def render_file_section() -> Tuple[bool, Optional[str]]:
     Returns:
         Tuple of (file_loaded, file_path)
     """
-    with st.expander("📁 Load Parquet File", expanded=True):
+    with st.expander("📁 Load Parquet", expanded=True):
         file_path = st.text_input(
-            "Parquet file path",
+            "Parquet file or directory path",
             value=st.session_state.get("parquet_file_path", ""),
-            help="Path to your parquet file containing embeddings and metadata"
+            help="Path to a parquet file or directory of parquet files containing embeddings and metadata"
         )
 
         load_button = st.button("Load File", type="primary")
 
         if load_button and file_path and os.path.exists(file_path):
             try:
+                logger.info(f"Loading parquet file: {file_path}")
                 with st.spinner("Loading parquet file..."):
-                    # Load as PyArrow table for efficiency
                     table = pq.read_table(file_path)
                     df = table.to_pandas()
+
+                logger.info(f"Loaded {len(df):,} records, {len(table.column_names)} columns, "
+                            f"schema: {[f'{c.name}({c.type})' for c in table.schema]}")
 
                 # Validate required columns
                 if 'uuid' not in table.column_names:
                     st.error("Missing required 'uuid' column")
+                    logger.error("Parquet validation failed: missing 'uuid' column")
                     return False, file_path
                 if 'emb' not in table.column_names:
                     st.error("Missing required 'emb' column")
+                    logger.error("Parquet validation failed: missing 'emb' column")
                     return False, file_path
+
+                emb_dim = len(df['emb'].iloc[0])
+                logger.info(f"Embedding dimension: {emb_dim}")
 
                 # Dynamically analyze all columns
                 column_info = get_column_info_dynamic(table)
+                logger.info(f"Column analysis: {len(column_info)} filterable columns "
+                            f"({sum(1 for v in column_info.values() if v['type'] == 'categorical')} categorical, "
+                            f"{sum(1 for v in column_info.values() if v['type'] == 'numeric')} numeric, "
+                            f"{sum(1 for v in column_info.values() if v['type'] == 'text')} text)")
 
                 # Store in session state
                 st.session_state.parquet_table = table
@@ -198,12 +210,13 @@ def render_file_section() -> Tuple[bool, Optional[str]]:
                 st.session_state.pending_filters = {}
 
                 st.success(f"Loaded {len(df):,} records with {len(column_info)} filterable columns")
-                st.info(f"Embedding dimension: {len(df['emb'].iloc[0])}")
+                st.info(f"Embedding dimension: {emb_dim}")
 
                 return True, file_path
 
             except Exception as e:
                 st.error(f"Error loading file: {e}")
+                logger.exception(f"Failed to load parquet file: {file_path}")
                 return False, file_path
 
         elif load_button and file_path:
@@ -398,8 +411,12 @@ def render_dynamic_filters() -> Dict[str, Any]:
         if apply_button:
             if pending_filters:
                 with st.spinner("Applying filters..."):
+                    logger.info(f"Applying filters: {list(pending_filters.keys())}")
                     filtered_table = apply_filters_arrow(table, pending_filters)
                     filtered_df = filtered_table.to_pandas()
+
+                    logger.info(f"Filter result: {len(df):,} -> {len(filtered_df):,} records "
+                                f"({len(filtered_df)/len(df)*100:.1f}% retained)")
 
                     st.session_state.filtered_df = filtered_df
                     st.session_state.active_filters = pending_filters.copy()
@@ -626,66 +643,19 @@ def run_clustering_with_error_handling(
         logger.info(f"Memory: ~{mem_mb:.1f} MB | Clusters: {n_clusters}")
         logger.info(f"Embeddings extracted ({t_extract:.2f}s)")
 
-        # Run clustering with error handling
+        # Run clustering with automatic GPU fallback
         t_cluster_start = time.time()
         with st.spinner(f"Running {reduction_method} + KMeans..."):
-            try:
-                df_plot, labels = ClusteringService.run_clustering(
-                    embeddings,
-                    filtered_df['uuid'].tolist(),
-                    n_clusters,
-                    reduction_method,
-                    n_workers,
-                    actual_dim_backend,  # Use resolved backend
-                    actual_cluster_backend,  # Use resolved backend
-                    seed
-                )
-            except RuntimeError as e:
-                error_msg = str(e).lower()
-
-                # Handle CUDA out of memory
-                if "out of memory" in error_msg or "oom" in error_msg:
-                    st.error("🔴 **GPU Out of Memory**")
-                    st.markdown("""
-                    **Try:**
-                    1. Reduce dataset size with more filters
-                    2. Use 'sklearn' backend instead of 'cuml'
-                    3. Use PCA (more memory-efficient than t-SNE/UMAP)
-                    """)
-                    return
-
-                # Handle CUDA architecture incompatibility
-                elif "no kernel image" in error_msg:
-                    logger.warning("GPU arch incompatible, falling back to sklearn...")
-                    df_plot, labels = ClusteringService.run_clustering(
-                        embeddings, filtered_df['uuid'].tolist(), n_clusters,
-                        reduction_method, n_workers, "sklearn", "sklearn", seed
-                    )
-
-                # Handle missing NVRTC library
-                elif "nvrtc" in error_msg or "libnvrtc" in error_msg:
-                    logger.warning("CUDA runtime missing, falling back to sklearn...")
-                    df_plot, labels = ClusteringService.run_clustering(
-                        embeddings, filtered_df['uuid'].tolist(), n_clusters,
-                        reduction_method, n_workers, "sklearn", "sklearn", seed
-                    )
-
-                else:
-                    raise
-
-            except MemoryError:
-                st.error("🔴 **System Out of Memory** - Reduce dataset size")
-                return
-
-            except OSError as e:
-                if "nvrtc" in str(e).lower() or "cuda" in str(e).lower():
-                    logger.warning("CUDA library issue, falling back to sklearn...")
-                    df_plot, labels = ClusteringService.run_clustering(
-                        embeddings, filtered_df['uuid'].tolist(), n_clusters,
-                        reduction_method, n_workers, "sklearn", "sklearn", seed
-                    )
-                else:
-                    raise
+            df_plot, labels = ClusteringService.run_clustering_safe(
+                embeddings,
+                filtered_df['uuid'].tolist(),
+                n_clusters,
+                reduction_method,
+                n_workers,
+                actual_dim_backend,
+                actual_cluster_backend,
+                seed
+            )
 
         t_cluster = time.time() - t_cluster_start
         t_total = time.time() - t_start
@@ -737,15 +707,22 @@ def run_clustering_with_error_handling(
 
         st.success(f"Clustering complete! {n_clusters} clusters found.")
 
-    except Exception as e:
-        error_msg = str(e)
-
-        # Provide helpful error messages
-        if "cuda" in error_msg.lower() or "gpu" in error_msg.lower():
-            st.error(f"🔴 **GPU Error:** {error_msg[:200]}")
-            st.info("💡 Try selecting 'sklearn' in backend settings to use CPU instead")
+    except (RuntimeError, OSError) as e:
+        if is_oom_error(e):
+            st.error("**GPU Out of Memory**")
+            st.info("Try: Reduce dataset size with more filters, use 'sklearn' backend, or use PCA")
+            logger.exception("GPU OOM error during clustering")
         else:
-            st.error(f"❌ **Error:** {error_msg}")
+            st.error(f"Error during clustering: {e}")
+            logger.exception("Clustering error")
+
+    except MemoryError:
+        st.error("**System Out of Memory** - Reduce dataset size")
+        logger.exception("System memory exhausted during clustering")
+
+    except Exception as e:
+        st.error(f"Error: {e}")
+        logger.exception("Unexpected clustering error")
 
 
 def create_cluster_dataframe(df: pd.DataFrame, embeddings_2d: np.ndarray, labels: np.ndarray) -> pd.DataFrame:

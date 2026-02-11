@@ -150,6 +150,7 @@ def is_oom_error(error: Exception) -> bool:
     error_msg = str(error).lower()
     oom_indicators = [
         "out of memory",
+        "cudaerroroutofmemory",
         "oom",
         "memory allocation failed",
         "cudamalloc failed",
