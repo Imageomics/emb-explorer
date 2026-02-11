@@ -7,8 +7,6 @@ from shared.utils.clustering import (
     reduce_dim,
     VRAMExceededError,
     GPUArchitectureError,
-    is_cuda_oom_error,
-    is_cuda_arch_error,
     get_gpu_memory_info,
     estimate_memory_requirement,
 )
@@ -26,8 +24,6 @@ __all__ = [
     "reduce_dim",
     "VRAMExceededError",
     "GPUArchitectureError",
-    "is_cuda_oom_error",
-    "is_cuda_arch_error",
     "get_gpu_memory_info",
     "estimate_memory_requirement",
     "list_image_files",

@@ -1,4 +1,3 @@
-import pandas as pd
 import open_clip
 
 def list_available_models():
@@ -22,3 +21,13 @@ def list_available_models():
         })
     
     return models_data
+
+
+def print_available_models():
+    """CLI entry point: print all available models to stdout."""
+    models = list_available_models()
+    for m in models:
+        if m["pretrained"]:
+            print(f"{m['name']}  (pretrained: {m['pretrained']})")
+        else:
+            print(m["name"])

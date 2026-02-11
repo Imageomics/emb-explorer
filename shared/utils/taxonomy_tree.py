@@ -4,7 +4,7 @@ Utility functions for building and displaying taxonomic trees.
 
 import pandas as pd
 from typing import Dict, List, Any, Optional
-from collections import defaultdict, Counter
+from collections import defaultdict
 
 
 def build_taxonomic_tree(df: pd.DataFrame) -> Dict[str, Any]:
