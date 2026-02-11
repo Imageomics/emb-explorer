@@ -1,4 +1,8 @@
 from typing import Optional, Tuple
+import os
+import sys
+import subprocess
+import tempfile
 import time
 import numpy as np
 from sklearn.cluster import KMeans
@@ -55,33 +59,6 @@ class VRAMExceededError(Exception):
 class GPUArchitectureError(Exception):
     """Raised when GPU architecture is not supported."""
     pass
-
-
-def is_cuda_oom_error(error: Exception) -> bool:
-    """Check if an exception is a CUDA out-of-memory error."""
-    error_msg = str(error).lower()
-    oom_indicators = [
-        "out of memory",
-        "cuda error: out of memory",
-        "cudaerroroutofmemory",
-        "oom",
-        "memory allocation failed",
-        "cudamalloc failed",
-        "failed to allocate",
-    ]
-    return any(indicator in error_msg for indicator in oom_indicators)
-
-
-def is_cuda_arch_error(error: Exception) -> bool:
-    """Check if an exception is a CUDA architecture incompatibility error."""
-    error_msg = str(error).lower()
-    arch_indicators = [
-        "no kernel image",
-        "cudaerrornokernel",
-        "unsupported gpu",
-        "compute capability",
-    ]
-    return any(indicator in error_msg for indicator in arch_indicators)
 
 
 def get_gpu_memory_info() -> Optional[Tuple[int, int]]:
@@ -212,40 +189,39 @@ def _reduce_dim_sklearn(embeddings: np.ndarray, method: str, seed: Optional[int]
 def _reduce_dim_cuml(embeddings: np.ndarray, method: str, seed: Optional[int], n_workers: int):
     """Dimensionality reduction using cuML GPU backends."""
     try:
-        # Convert to cupy array for GPU processing
+        # Validate input data
+        embeddings = np.ascontiguousarray(embeddings, dtype=np.float32)
+        if not np.all(np.isfinite(embeddings)):
+            logger.warning("Non-finite values found in embeddings, replacing with 0")
+            embeddings = np.nan_to_num(embeddings, nan=0.0, posinf=0.0, neginf=0.0)
+
+        if method.upper() == "UMAP":
+            # cuML UMAP can crash with SIGFPE on certain data distributions
+            # (NN-descent numerical instability).  SIGFPE is a signal, not a
+            # Python exception, so try/except cannot catch it.  Run in an
+            # isolated subprocess so the main process (Streamlit) survives.
+            return _run_cuml_umap_subprocess(embeddings, seed)
+
+        # PCA and TSNE are stable — run in-process
         embeddings_gpu = cp.asarray(embeddings, dtype=cp.float32)
 
         if method.upper() == "PCA":
             reducer = cuPCA(n_components=2)
         elif method.upper() == "TSNE":
-            # Adjust perplexity to be valid for the sample size
             n_samples = embeddings.shape[0]
-            perplexity = min(30, max(5, n_samples // 3))  # Ensure perplexity is reasonable
+            perplexity = min(30, max(5, n_samples // 3))
 
             if seed is not None:
                 reducer = cuTSNE(n_components=2, perplexity=perplexity, random_state=seed)
             else:
                 reducer = cuTSNE(n_components=2, perplexity=perplexity)
-        elif method.upper() == "UMAP":
-            # Adjust n_neighbors to be valid for the sample size
-            n_samples = embeddings.shape[0]
-            n_neighbors = min(15, max(2, n_samples - 1))
-
-            if seed is not None:
-                reducer = cuUMAP(n_components=2, n_neighbors=n_neighbors, random_state=seed)
-            else:
-                reducer = cuUMAP(n_components=2, n_neighbors=n_neighbors)
         else:
             raise ValueError("Unsupported method. Choose 'PCA', 'TSNE', or 'UMAP'.")
 
-        # Fit and transform on GPU
         result_gpu = reducer.fit_transform(embeddings_gpu)
-
-        # Convert back to numpy array
         return cp.asnumpy(result_gpu)
 
     except RuntimeError as e:
-        # Handle CUDA architecture mismatch (e.g., V100 not supported by pip wheels)
         error_msg = str(e).lower()
         if "no kernel image" in error_msg or "cudaerrornokernel" in error_msg:
             logger.warning(f"cuML {method} not supported on this GPU architecture, falling back to sklearn")
@@ -255,6 +231,78 @@ def _reduce_dim_cuml(embeddings: np.ndarray, method: str, seed: Optional[int], n
     except Exception as e:
         logger.warning(f"cuML reduction failed ({e}), falling back to sklearn")
         return _reduce_dim_sklearn(embeddings, method, seed, n_workers)
+
+
+# Standalone script executed in a subprocess for cuML UMAP.
+# Kept minimal: only imports cuml/cupy/numpy, no project dependencies.
+_CUML_UMAP_SCRIPT = """\
+import sys, numpy as np, cupy as cp
+from cuml.manifold import UMAP as cuUMAP
+
+input_path, output_path = sys.argv[1], sys.argv[2]
+n_neighbors = int(sys.argv[3])
+seed = int(sys.argv[4]) if sys.argv[4] else None
+
+embeddings = np.load(input_path)
+emb_gpu = cp.asarray(embeddings, dtype=cp.float32)
+
+# L2-normalize to stabilise NN-descent (prevents SIGFPE from extreme values)
+norms = cp.linalg.norm(emb_gpu, axis=1, keepdims=True)
+emb_gpu = emb_gpu / cp.maximum(norms, 1e-10)
+
+kw = dict(n_components=2, n_neighbors=n_neighbors)
+if seed is not None:
+    kw["random_state"] = seed
+reducer = cuUMAP(**kw)
+result = reducer.fit_transform(emb_gpu)
+np.save(output_path, cp.asnumpy(result))
+"""
+
+
+def _run_cuml_umap_subprocess(embeddings: np.ndarray, seed: Optional[int]) -> np.ndarray:
+    """Run cuML UMAP in an isolated subprocess to survive SIGFPE crashes.
+
+    cuML UMAP's NN-descent can trigger a floating-point exception (SIGFPE) on
+    certain data distributions, which kills the entire process.  By running in
+    a child process, the parent (Streamlit) survives and can fall back to
+    sklearn UMAP.
+    """
+    n_samples = embeddings.shape[0]
+    n_neighbors = min(15, max(2, n_samples - 1))
+
+    # Use /dev/shm for fast IPC when available, else /tmp
+    shm_dir = "/dev/shm" if os.path.isdir("/dev/shm") else tempfile.gettempdir()
+    input_path = os.path.join(shm_dir, f"cuml_umap_in_{os.getpid()}.npy")
+    output_path = os.path.join(shm_dir, f"cuml_umap_out_{os.getpid()}.npy")
+
+    np.save(input_path, embeddings)
+    seed_arg = str(seed) if seed is not None else ""
+
+    try:
+        logger.info(f"Running cuML UMAP in subprocess ({n_samples} samples, "
+                    f"n_neighbors={n_neighbors})")
+        result = subprocess.run(
+            [sys.executable, "-c", _CUML_UMAP_SCRIPT,
+             input_path, output_path, str(n_neighbors), seed_arg],
+            capture_output=True, text=True, timeout=300,
+        )
+
+        if result.returncode == 0 and os.path.exists(output_path):
+            reduced = np.load(output_path)
+            logger.info("cuML UMAP subprocess completed successfully")
+            return reduced
+
+        stderr = result.stderr.strip()
+        raise RuntimeError(
+            f"cuML UMAP subprocess failed (rc={result.returncode}): "
+            f"{stderr[-500:] if stderr else 'no stderr'}"
+        )
+    finally:
+        for path in (input_path, output_path):
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
 
 def run_kmeans(embeddings: np.ndarray, n_clusters: int, seed: Optional[int] = None, n_workers: int = 1, backend: str = "auto"):
     """
