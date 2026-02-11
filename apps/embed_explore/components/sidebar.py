@@ -61,12 +61,14 @@ def render_embedding_section() -> Tuple[bool, Optional[str], Optional[str], int,
 
                     if embeddings.shape[0] == 0:
                         st.error("No valid image embeddings found.")
+                        logger.warning("Embedding generation returned 0 embeddings")
                         st.session_state.embeddings = None
                         st.session_state.valid_paths = None
                         st.session_state.labels = None
                         st.session_state.data = None
                         st.session_state.selected_image_idx = None
                     else:
+                        logger.info(f"Embeddings stored: shape={embeddings.shape}, dtype={embeddings.dtype}")
                         st.success(f"Generated {embeddings.shape[0]} image embeddings.")
                         st.session_state.embeddings = embeddings
                         st.session_state.valid_paths = valid_paths

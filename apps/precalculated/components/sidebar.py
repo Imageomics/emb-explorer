@@ -509,10 +509,12 @@ def extract_embeddings_safe(df: pd.DataFrame) -> np.ndarray:
         df: DataFrame with 'emb' column
 
     Returns:
-        numpy array of embeddings
+        numpy array of embeddings (float32)
     """
     if 'emb' not in df.columns:
         raise ValueError("DataFrame does not contain 'emb' column")
+
+    logger.info(f"Extracting embeddings from DataFrame: {len(df)} rows")
 
     # Use np.stack for efficient conversion
     embeddings = np.stack(df['emb'].values)
@@ -520,7 +522,10 @@ def extract_embeddings_safe(df: pd.DataFrame) -> np.ndarray:
     if embeddings.ndim != 2:
         raise ValueError(f"Embeddings should be 2D, got shape {embeddings.shape}")
 
-    return embeddings.astype(np.float32)
+    embeddings = embeddings.astype(np.float32)
+    logger.info(f"Extracted embeddings: shape={embeddings.shape}, dtype={embeddings.dtype}")
+
+    return embeddings
 
 
 def render_clustering_section() -> Tuple[bool, int, str, str, str, int, Optional[int]]:

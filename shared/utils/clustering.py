@@ -114,6 +114,45 @@ def estimate_memory_requirement(n_samples: int, n_features: int, method: str) ->
     else:
         return int(base_mb * 3)
 
+def _prepare_embeddings(embeddings: np.ndarray, operation: str) -> np.ndarray:
+    """Validate, cast to float32, and L2-normalize embeddings.
+
+    L2 normalization projects vectors onto the unit hypersphere (magnitude 1).
+    This stabilises cuML's NN-descent (prevents SIGFPE from large magnitudes)
+    and is appropriate for contrastive-model embeddings (e.g. CLIP, BioCLIP)
+    whose training objective is cosine-similarity based.
+
+    Args:
+        embeddings: Raw embedding matrix (n_samples, n_features).
+        operation: Label for log messages (e.g. "reduce_dim", "kmeans").
+
+    Returns:
+        L2-normalized float32 embedding matrix.
+    """
+    n_samples, n_features = embeddings.shape
+
+    # Cast to float32
+    embeddings = np.ascontiguousarray(embeddings, dtype=np.float32)
+
+    # Check for non-finite values
+    n_nonfinite = (~np.isfinite(embeddings)).sum()
+    if n_nonfinite > 0:
+        logger.warning(f"[{operation}] {n_nonfinite} non-finite values found, replacing with 0")
+        embeddings = np.nan_to_num(embeddings, nan=0.0, posinf=0.0, neginf=0.0)
+
+    # L2 normalize
+    norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
+    n_zero = (norms.ravel() < 1e-10).sum()
+    if n_zero > 0:
+        logger.warning(f"[{operation}] {n_zero} near-zero-norm vectors found (will clamp to avoid division by zero)")
+    embeddings = embeddings / np.maximum(norms, 1e-10)
+
+    logger.info(f"[{operation}] Prepared embeddings: {n_samples} samples, {n_features} features, "
+                f"dtype=float32, L2-normalized "
+                f"(input norms: min={norms.min():.2f}, max={norms.max():.2f}, mean={norms.mean():.2f})")
+    return embeddings
+
+
 def reduce_dim(embeddings: np.ndarray, method: str = "PCA", seed: Optional[int] = None, n_workers: int = 1, backend: str = "auto"):
     """
     Reduce the dimensionality of embeddings to 2D using PCA, t-SNE, or UMAP.
@@ -133,6 +172,9 @@ def reduce_dim(embeddings: np.ndarray, method: str = "PCA", seed: Optional[int] 
     """
     n_samples, n_features = embeddings.shape
     logger.info(f"Dimensionality reduction: method={method}, samples={n_samples}, features={n_features}, backend={backend}")
+
+    # Validate, cast, and L2-normalize
+    embeddings = _prepare_embeddings(embeddings, "reduce_dim")
 
     # Determine which backend to use
     use_cuml = False
@@ -187,14 +229,11 @@ def _reduce_dim_sklearn(embeddings: np.ndarray, method: str, seed: Optional[int]
 
 
 def _reduce_dim_cuml(embeddings: np.ndarray, method: str, seed: Optional[int], n_workers: int):
-    """Dimensionality reduction using cuML GPU backends."""
-    try:
-        # Validate input data
-        embeddings = np.ascontiguousarray(embeddings, dtype=np.float32)
-        if not np.all(np.isfinite(embeddings)):
-            logger.warning("Non-finite values found in embeddings, replacing with 0")
-            embeddings = np.nan_to_num(embeddings, nan=0.0, posinf=0.0, neginf=0.0)
+    """Dimensionality reduction using cuML GPU backends.
 
+    Expects embeddings to already be L2-normalized float32 from _prepare_embeddings().
+    """
+    try:
         if method.upper() == "UMAP":
             # cuML UMAP can crash with SIGFPE on certain data distributions
             # (NN-descent numerical instability).  SIGFPE is a signal, not a
@@ -246,9 +285,11 @@ seed = int(sys.argv[4]) if sys.argv[4] else None
 embeddings = np.load(input_path)
 emb_gpu = cp.asarray(embeddings, dtype=cp.float32)
 
-# L2-normalize to stabilise NN-descent (prevents SIGFPE from extreme values)
-norms = cp.linalg.norm(emb_gpu, axis=1, keepdims=True)
-emb_gpu = emb_gpu / cp.maximum(norms, 1e-10)
+# Embeddings arrive L2-normalized from _prepare_embeddings().
+# Verify as a safety net — re-normalize if needed (prevents SIGFPE from NN-descent).
+norms = cp.linalg.norm(emb_gpu, axis=1)
+if cp.abs(norms.mean() - 1.0) > 0.01:
+    emb_gpu = emb_gpu / cp.maximum(norms.reshape(-1, 1), 1e-10)
 
 kw = dict(n_components=2, n_neighbors=n_neighbors)
 if seed is not None:
@@ -321,6 +362,9 @@ def run_kmeans(embeddings: np.ndarray, n_clusters: int, seed: Optional[int] = No
     """
     n_samples = embeddings.shape[0]
     logger.info(f"KMeans clustering: n_clusters={n_clusters}, samples={n_samples}, backend={backend}")
+
+    # Validate, cast, and L2-normalize
+    embeddings = _prepare_embeddings(embeddings, "kmeans")
 
     start_time = time.time()
 

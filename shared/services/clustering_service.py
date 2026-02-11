@@ -45,23 +45,28 @@ class ClusteringService:
         Returns:
             Tuple of (cluster dataframe, cluster labels)
         """
-        logger.info(f"Starting clustering workflow: n_samples={len(embeddings)}, n_clusters={n_clusters}, "
-                    f"reduction={reduction_method}, dim_backend={dim_reduction_backend}, "
-                    f"clustering_backend={clustering_backend}")
+        n_samples, n_features = embeddings.shape
+        logger.info(f"Starting clustering workflow: samples={n_samples}, features={n_features}, "
+                    f"n_clusters={n_clusters}, reduction={reduction_method}, "
+                    f"dim_backend={dim_reduction_backend}, cluster_backend={clustering_backend}, "
+                    f"seed={seed}")
 
         total_start = time.time()
 
         # Step 1: Perform K-means clustering on full high-dimensional embeddings
+        # (embeddings are L2-normalized inside run_kmeans)
         logger.info("Step 1/2: Running KMeans clustering on high-dimensional embeddings")
         kmeans, labels = run_kmeans(
-            embeddings,  # Use original high-dimensional embeddings for clustering
+            embeddings,
             int(n_clusters),
             seed=seed,
             n_workers=n_workers,
             backend=clustering_backend
         )
+        logger.info(f"Step 1/2 complete: {len(np.unique(labels))} clusters assigned")
 
         # Step 2: Reduce dimensionality to 2D for visualization only
+        # (embeddings are L2-normalized inside reduce_dim)
         logger.info("Step 2/2: Reducing dimensionality to 2D for visualization")
         reduced = reduce_dim(
             embeddings,
@@ -70,6 +75,7 @@ class ClusteringService:
             n_workers=n_workers,
             backend=dim_reduction_backend
         )
+        logger.info(f"Step 2/2 complete: reduced to shape {reduced.shape}")
 
         df_plot = pd.DataFrame({
             "x": reduced[:, 0],
