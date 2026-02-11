@@ -27,7 +27,7 @@ Visual exploration and clustering tool for image embeddings.
 
 **Embed & Explore** - Embed images using pretrained models (CLIP, BioCLIP), cluster with K-Means, visualize with PCA/t-SNE/UMAP, and repartition images by cluster.
 
-**Precalculated Embeddings** - Load parquet files with precomputed embeddings, apply dynamic cascading filters, and explore clusters with taxonomy tree navigation.
+**Precalculated Embeddings** - Load parquet files (or directories of parquets) with precomputed embeddings, apply dynamic cascading filters, and explore clusters with taxonomy tree navigation. See [Data Format](docs/DATA_FORMAT.md) for the expected schema.
 
 ## Installation
 
@@ -38,10 +38,21 @@ cd emb-explorer
 # Using uv (recommended)
 uv venv && source .venv/bin/activate
 uv pip install -e .
-
-# GPU support (CUDA 12.0+ required)
-uv pip install -e ".[gpu]"
 ```
+
+### GPU Acceleration (optional)
+
+A GPU is **not required** — everything works on CPU out of the box. But if you have an NVIDIA GPU with CUDA, clustering and dimensionality reduction (KMeans, t-SNE, UMAP) will be significantly faster via [cuML](https://docs.rapids.ai/api/cuml/stable/).
+
+```bash
+# CUDA 12.x 
+uv pip install -e ".[gpu-cu12]"
+
+# CUDA 13.x
+uv pip install -e ".[gpu-cu13]"
+```
+
+The app auto-detects GPU availability at runtime and falls back to CPU if anything goes wrong — no configuration needed. You can also manually select backends (cuML, FAISS, sklearn) in the sidebar.
 
 ## Usage
 
