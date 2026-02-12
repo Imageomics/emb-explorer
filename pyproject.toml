@@ -33,7 +33,7 @@ dependencies = [
     # Core UI and web framework
     "streamlit>=1.50.0",
     # Data processing and numerical computing
-    "numpy<=2.2.0",  # capped: cuML/numba require numpy <2.3 as of 2025
+    "numpy<2.3",  # capped: numba 0.61.x requires numpy <2.3
     "pandas>=2.0.0",
     "pillow>=9.0.0",
     "pyarrow>=10.0.0",
