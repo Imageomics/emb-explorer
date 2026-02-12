@@ -1,5 +1,6 @@
 #!/bin/bash
-#SBATCH --account=PAS2136
+# NOTE: Edit --account to match your SLURM allocation before submitting.
+#SBATCH --account=CHANGE_ME
 #SBATCH --partition=gpu
 #SBATCH --gpus-per-node=1
 #SBATCH --time=00:30:00
@@ -7,11 +8,15 @@
 #SBATCH --output=tests/gpu_test_results_%j.log
 
 # ------------------------------------------------------------------
-# GPU test runner for emb-explorer (OSC Pitzer)
+# GPU test runner for emb-explorer
+#
+# Before first use:
+#   1. Set --account above to your SLURM allocation (e.g. PAS2136)
+#   2. Export VENV_DIR to point to your venv base directory
 #
 # Usage:
-#   sbatch tests/run_gpu_tests.sh            # GPU tests only
-#   sbatch tests/run_gpu_tests.sh --all      # full suite on GPU node
+#   VENV_DIR=/path/to/venvs sbatch tests/run_gpu_tests.sh          # full suite on GPU node
+#   VENV_DIR=/path/to/venvs sbatch tests/run_gpu_tests.sh --gpu    # GPU-marked tests only
 # ------------------------------------------------------------------
 
 set -euo pipefail
@@ -20,8 +25,12 @@ set -euo pipefail
 PROJECT_DIR="${SLURM_SUBMIT_DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
 cd "$PROJECT_DIR"
 
-# Activate venv ($VENV_DIR should point to the base venv directory)
-VENV_DIR="${VENV_DIR:-/fs/scratch/PAS2136/netzissou/venv}"
+# Activate venv — VENV_DIR must be set by the user
+if [[ -z "${VENV_DIR:-}" ]]; then
+    echo "ERROR: VENV_DIR is not set. Export it to your venv base directory." >&2
+    echo "  e.g.: VENV_DIR=/fs/scratch/PAS2136/\$USER/venv sbatch tests/run_gpu_tests.sh" >&2
+    exit 1
+fi
 source "$VENV_DIR/emb_explorer_pitzer/bin/activate"
 
 # cuML/CuPy need nvidia libs on LD_LIBRARY_PATH
@@ -36,10 +45,10 @@ echo "Python:  $(python --version)"
 echo "Project: $PROJECT_DIR"
 echo "===================="
 
-if [[ "${1:-}" == "--all" ]]; then
-    echo "Running FULL test suite on GPU node..."
-    pytest tests/ -v
-else
-    echo "Running GPU-marked tests..."
+if [[ "${1:-}" == "--gpu" ]]; then
+    echo "Running GPU-marked tests only..."
     pytest tests/ -m gpu -v
+else
+    echo "Running full test suite on GPU node..."
+    pytest tests/ -v
 fi

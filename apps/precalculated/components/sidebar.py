@@ -478,11 +478,10 @@ def apply_filters_arrow(table: pa.Table, filters: Dict[str, Any]) -> pa.Table:
             if len(filter_value) > 0:
                 filter_expressions.append(pc.is_in(col_ref, pa.array(filter_value)))
         elif isinstance(filter_value, str):
-            # Text filter (case-insensitive contains)
+            # Text filter (case-insensitive literal substring match)
             if filter_value.strip():
-                pattern = f".*{filter_value.lower()}.*"
                 filter_expressions.append(
-                    pc.match_substring_regex(pc.utf8_lower(col_ref), pattern)
+                    pc.match_substring(pc.utf8_lower(col_ref), filter_value.lower())
                 )
 
     # Combine all filters with AND

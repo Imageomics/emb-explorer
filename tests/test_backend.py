@@ -113,12 +113,10 @@ class TestResolveBackend:
 class TestCheckCudaAvailable:
     def test_returns_false_without_gpu(self, reset_cuda_cache):
         """On a CPU-only node, should return (False, 'CPU only')."""
-        with patch.dict("sys.modules", {"torch": None, "cupy": None}):
-            # Force fresh check by bypassing the cached imports
-            with patch("shared.utils.backend.check_cuda_available") as mock_check:
-                mock_check.return_value = (False, "CPU only")
-                result = mock_check()
-                assert result == (False, "CPU only")
+        with patch("shared.utils.backend.HAS_TORCH_PACKAGE", False), \
+             patch("shared.utils.backend.HAS_CUPY_PACKAGE", False):
+            result = check_cuda_available()
+            assert result == (False, "CPU only")
 
     def test_cache_prevents_reimport(self, reset_cuda_cache):
         """Second call should return cached value."""

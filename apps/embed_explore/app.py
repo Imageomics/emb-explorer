@@ -14,7 +14,17 @@ from shared.components.visualization import render_scatter_plot
 
 
 def main():
-    """Main application entry point."""
+    """CLI entry point — launches the Streamlit server."""
+    import sys
+    import os
+    from streamlit.web import cli as stcli
+
+    sys.argv = ["streamlit", "run", os.path.abspath(__file__), "--server.headless", "true"]
+    stcli.main()
+
+
+def app():
+    """Streamlit application layout."""
     st.set_page_config(
         layout="wide",
         page_title="Embed & Explore",
@@ -45,4 +55,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    app()

@@ -19,19 +19,21 @@ pytest tests/ -m "not gpu"
 
 > **Heads up:** TSNE/UMAP tests are slow on CPU-only nodes (~12 min total). PCA and everything else is fast. On GPU nodes the full suite runs much quicker.
 
-## Running GPU Tests
+## Running on GPU Nodes
 
-GPU-marked tests (`@pytest.mark.gpu`) need a compute node with a CUDA-capable GPU. If your cluster uses SLURM:
+All current tests run on CPU, but some (UMAP, t-SNE) are significantly faster on a GPU node. If your cluster uses SLURM:
 
 ```bash
 # Interactive
 salloc --partition=gpu --gpus-per-node=1 --time=00:30:00
 # activate venv, then:
-pytest tests/ -m gpu -v
-
-# Or run the full suite on a GPU node
 pytest tests/ -v
+
+# Or submit via the batch script (set VENV_DIR first)
+VENV_DIR=/path/to/venvs sbatch tests/run_gpu_tests.sh
 ```
+
+> The `@pytest.mark.gpu` marker is registered for future GPU-specific tests (e.g. real cuML/FAISS-GPU code paths). No tests use it yet — all 98 tests pass on CPU-only nodes.
 
 ## What's Tested
 
@@ -56,7 +58,7 @@ pytest tests/ -v
 
 - **CPU tests need no GPU.** All 98 tests pass on login/compute nodes without CUDA.
 - **GPU fallback is tested by mocking** — we patch `HAS_CUML`, `HAS_CUDA`, `cp` (cupy), and `subprocess.run` to simulate GPU failures and verify the fallback chain.
-- **GPU execution is tested on real hardware** — `@pytest.mark.gpu` tests run actual cuML/FAISS-GPU code paths on GPU nodes.
+- **GPU execution on real hardware** — `@pytest.mark.gpu` is registered for future tests that exercise actual cuML/FAISS-GPU code paths.
 - **Pure functions are tested directly** — `_prepare_embeddings()`, `apply_filters_arrow()`, `build_taxonomic_tree()`, error classifiers, etc. No mocking needed.
 - **Small data** — fixtures use 10-100 samples to keep tests fast.
 
@@ -69,12 +71,12 @@ If you're adding new utility functions to `shared/utils/` or `shared/services/`:
 3. **Mock GPU code**, don't try to call it. Patch module-level flags like `HAS_CUML` or inject mock objects for `cp` (cupy).
 4. **Run `pytest tests/ -v`** after changes to verify nothing broke.
 5. The `reset_cuda_cache` and `reset_logging` fixtures exist because those modules use global state — use them when testing `backend.py` or `logging_config.py`.
-6. **GPU tests** use `@pytest.mark.gpu`. These only run on GPU nodes — don't expect them to pass on CPU-only nodes.
+6. **GPU tests** (future) use `@pytest.mark.gpu`. These only run on GPU nodes — don't expect them to pass on CPU-only nodes.
 
 ## Markers
 
 | Marker | Purpose |
 |---|---|
-| `@pytest.mark.gpu` | Requires CUDA GPU. Run on GPU-capable compute nodes via `pytest -m gpu`. |
+| `@pytest.mark.gpu` | Requires CUDA GPU. Reserved for future GPU-specific tests. Run via `pytest -m gpu`. |
 
 Registered in `pyproject.toml` under `[tool.pytest.ini_options]`.
