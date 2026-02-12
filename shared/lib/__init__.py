@@ -1,7 +1,7 @@
 """
 Shared library utilities.
+
+Import directly from submodules:
+
+    from shared.lib.progress import StreamlitProgressContext
 """
-
-from shared.lib.progress import StreamlitProgressContext, MockProgressContext
-
-__all__ = ["StreamlitProgressContext", "MockProgressContext"]

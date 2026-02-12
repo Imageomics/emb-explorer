@@ -5,41 +5,26 @@ Shared clustering controls component.
 import streamlit as st
 from typing import Tuple, Optional
 
+from shared.utils.backend import HAS_FAISS_PACKAGE, HAS_CUML_PACKAGE, HAS_CUPY_PACKAGE
+
 
 def render_clustering_backend_controls():
     """
     Render clustering backend selection controls.
-    
+
     Returns:
         Tuple of (dim_reduction_backend, clustering_backend, n_workers, seed)
     """
-    # Backend availability detection
+    # Backend availability detection — uses find_spec() flags (instant, no heavy imports)
     dim_reduction_options = ["auto", "sklearn"]
     clustering_options = ["auto", "sklearn"]
-    
-    has_faiss = False
-    has_cuml = False
-    has_cuda = False
-    
-    # Check for FAISS (clustering only)
-    try:
-        import faiss
-        has_faiss = True
+
+    if HAS_FAISS_PACKAGE:
         clustering_options.append("faiss")
-    except ImportError:
-        pass
-    
-    # Check for cuML + CUDA (both dim reduction and clustering)
-    try:
-        import cuml
-        import cupy as cp
-        has_cuml = True
-        if cp.cuda.is_available():
-            has_cuda = True
-            dim_reduction_options.append("cuml")
-            clustering_options.append("cuml")
-    except ImportError:
-        pass
+
+    if HAS_CUML_PACKAGE and HAS_CUPY_PACKAGE:
+        dim_reduction_options.append("cuml")
+        clustering_options.append("cuml")
     
     # Show backend status
     use_seed = st.checkbox(

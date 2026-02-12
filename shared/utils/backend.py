@@ -3,12 +3,29 @@ Backend detection and resolution utilities.
 
 Provides consistent backend selection and CUDA availability checking
 across all applications.
+
+Availability checks use importlib.find_spec() for instant package detection
+without importing heavy libraries. Actual imports happen lazily when the
+backend is first used.
 """
 
+import importlib.util
 from typing import Tuple, Optional
 from shared.utils.logging_config import get_logger
 
 logger = get_logger(__name__)
+
+# --- Lightweight availability checks (find_spec, no actual import) ----------
+
+# These are safe to call at module-load / render time — they only check
+# whether the package is installed, without executing it.
+
+HAS_FAISS_PACKAGE: bool = importlib.util.find_spec("faiss") is not None
+HAS_CUML_PACKAGE: bool = importlib.util.find_spec("cuml") is not None
+HAS_CUPY_PACKAGE: bool = importlib.util.find_spec("cupy") is not None
+HAS_TORCH_PACKAGE: bool = importlib.util.find_spec("torch") is not None
+
+# --- Cached runtime checks (perform actual import, cached after first call) -
 
 # Cache CUDA availability to avoid repeated checks
 _cuda_check_cache: Optional[Tuple[bool, str]] = None
@@ -27,27 +44,29 @@ def check_cuda_available() -> Tuple[bool, str]:
         return _cuda_check_cache
 
     # Try PyTorch first
-    try:
-        import torch
-        if torch.cuda.is_available():
-            device_name = torch.cuda.get_device_name(0)
-            _cuda_check_cache = (True, device_name)
-            logger.info(f"CUDA available via PyTorch: {device_name}")
-            return _cuda_check_cache
-    except ImportError:
-        pass  # PyTorch not installed, try CuPy next
+    if HAS_TORCH_PACKAGE:
+        try:
+            import torch
+            if torch.cuda.is_available():
+                device_name = torch.cuda.get_device_name(0)
+                _cuda_check_cache = (True, device_name)
+                logger.info(f"CUDA available via PyTorch: {device_name}")
+                return _cuda_check_cache
+        except ImportError:
+            pass  # PyTorch not installed, try CuPy next
 
     # Try CuPy
-    try:
-        import cupy as cp
-        if cp.cuda.is_available():
-            device = cp.cuda.Device(0)
-            device_info = f"GPU {device.id}"
-            _cuda_check_cache = (True, device_info)
-            logger.info(f"CUDA available via CuPy: {device_info}")
-            return _cuda_check_cache
-    except ImportError:
-        pass  # CuPy not installed, fall through to CPU-only
+    if HAS_CUPY_PACKAGE:
+        try:
+            import cupy as cp
+            if cp.cuda.is_available():
+                device = cp.cuda.Device(0)
+                device_info = f"GPU {device.id}"
+                _cuda_check_cache = (True, device_info)
+                logger.info(f"CUDA available via CuPy: {device_info}")
+                return _cuda_check_cache
+        except ImportError:
+            pass  # CuPy not installed, fall through to CPU-only
 
     _cuda_check_cache = (False, "CPU only")
     logger.info("CUDA not available, using CPU")
@@ -55,7 +74,9 @@ def check_cuda_available() -> Tuple[bool, str]:
 
 
 def check_cuml_available() -> bool:
-    """Check if cuML is available."""
+    """Check if cuML is available (actual import, for runtime use)."""
+    if not HAS_CUML_PACKAGE:
+        return False
     try:
         import cuml
         return True
@@ -64,7 +85,9 @@ def check_cuml_available() -> bool:
 
 
 def check_faiss_available() -> bool:
-    """Check if FAISS is available."""
+    """Check if FAISS is available (actual import, for runtime use)."""
+    if not HAS_FAISS_PACKAGE:
+        return False
     try:
         import faiss
         return True

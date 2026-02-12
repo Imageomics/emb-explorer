@@ -1,5 +1,3 @@
-import open_clip
-
 def list_available_models():
     """List all available models."""
     
@@ -13,6 +11,7 @@ def list_available_models():
     ])
     
     # OpenCLIP models
+    import open_clip
     openclip_models = open_clip.list_pretrained()
     for model_name, pretrained in openclip_models:
         models_data.append({

@@ -1,10 +1,11 @@
 """
 Embedding generation service.
+
+Heavy libraries (torch, open_clip) are imported lazily inside methods
+to avoid slowing down app startup.
 """
 
-import torch
 import numpy as np
-import open_clip
 import streamlit as st
 import time
 from typing import Tuple, List, Optional, Callable
@@ -12,7 +13,6 @@ from typing import Tuple, List, Optional, Callable
 from shared.utils.io import list_image_files
 from shared.utils.models import list_available_models
 from shared.utils.logging_config import get_logger
-from hpc_inference.datasets.image_folder_dataset import ImageFolderDataset
 
 logger = get_logger(__name__)
 
@@ -55,6 +55,9 @@ class EmbeddingService:
     @st.cache_resource(show_spinner=True)
     def load_model_unified(selected_model: str, device: str = "cuda"):
         """Unified model loading function that handles all model types."""
+        import torch
+        import open_clip
+
         model_name, pretrained = EmbeddingService.parse_model_selection(selected_model)
 
         logger.info(f"Loading model: {model_name} (pretrained={pretrained}) on device={device}")
@@ -71,7 +74,6 @@ class EmbeddingService:
         return model, preprocess
 
     @staticmethod
-    @torch.no_grad()
     def generate_embeddings(
         image_dir: str,
         model_name: str,
@@ -92,6 +94,9 @@ class EmbeddingService:
         Returns:
             Tuple of (embeddings array, list of valid image paths)
         """
+        import torch
+        from hpc_inference.datasets.image_folder_dataset import ImageFolderDataset
+
         logger.info(f"Starting embedding generation: dir={image_dir}, model={model_name}, "
                     f"batch_size={batch_size}, n_workers={n_workers}")
         total_start = time.time()
@@ -135,16 +140,17 @@ class EmbeddingService:
         embeddings = []
 
         processed = 0
-        for batch_paths, batch_imgs in dataloader:
-            batch_imgs = batch_imgs.to(torch_device, non_blocking=True)
-            batch_embeds = model.encode_image(batch_imgs).cpu().numpy()
-            embeddings.append(batch_embeds)
-            valid_paths.extend(batch_paths)
-            processed += len(batch_paths)
+        with torch.no_grad():
+            for batch_paths, batch_imgs in dataloader:
+                batch_imgs = batch_imgs.to(torch_device, non_blocking=True)
+                batch_embeds = model.encode_image(batch_imgs).cpu().numpy()
+                embeddings.append(batch_embeds)
+                valid_paths.extend(batch_paths)
+                processed += len(batch_paths)
 
-            if progress_callback:
-                progress = 0.2 + (processed / total) * 0.8  # Use 20% to 100% for actual processing
-                progress_callback(progress, f"Embedding {processed}/{total}")
+                if progress_callback:
+                    progress = 0.2 + (processed / total) * 0.8  # Use 20% to 100% for actual processing
+                    progress_callback(progress, f"Embedding {processed}/{total}")
 
         # Stack embeddings if available
         if embeddings:

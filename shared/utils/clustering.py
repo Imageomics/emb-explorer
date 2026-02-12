@@ -5,50 +5,29 @@ import subprocess
 import tempfile
 import time
 import numpy as np
-from sklearn.cluster import KMeans
-from sklearn.decomposition import PCA
-from sklearn.manifold import TSNE
-from umap import UMAP
 
 from shared.utils.logging_config import get_logger
+from shared.utils.backend import (
+    HAS_FAISS_PACKAGE, HAS_CUML_PACKAGE, HAS_CUPY_PACKAGE,
+    check_cuda_available, check_cuml_available, check_faiss_available,
+)
 
 logger = get_logger(__name__)
 
-# Optional FAISS support for faster clustering
-try:
-    import faiss
-    HAS_FAISS = True
-    logger.debug("FAISS available")
-except ImportError:
-    HAS_FAISS = False
-    logger.debug("FAISS not available")
+# Legacy module-level flags — now backed by lightweight find_spec() checks
+# so importing this module no longer triggers heavy library loads.
+# Functions that actually need the libraries import them locally.
+HAS_FAISS: bool = HAS_FAISS_PACKAGE
+HAS_CUML: bool = HAS_CUML_PACKAGE and HAS_CUPY_PACKAGE
+HAS_CUDA: bool = False  # resolved lazily via check_cuda_available()
 
-# Optional cuML support for GPU acceleration
-try:
-    import cuml
-    from cuml.cluster import KMeans as cuKMeans
-    from cuml.decomposition import PCA as cuPCA
-    from cuml.manifold import TSNE as cuTSNE
-    from cuml.manifold import UMAP as cuUMAP
-    import cupy as cp
-    HAS_CUML = True
-    logger.debug("cuML available")
-except ImportError:
-    HAS_CUML = False
-    logger.debug("cuML not available")
 
-# Check for CUDA availability
-try:
-    import torch
-    HAS_CUDA = torch.cuda.is_available()
-except ImportError:
-    try:
-        import cupy as cp
-        HAS_CUDA = cp.cuda.is_available()
-    except ImportError:
-        HAS_CUDA = False
-
-logger.debug(f"CUDA available: {HAS_CUDA}")
+def _check_cuda() -> bool:
+    """Check CUDA availability (cached after first call)."""
+    global HAS_CUDA
+    available, _ = check_cuda_available()
+    HAS_CUDA = available
+    return available
 
 
 class VRAMExceededError(Exception):
@@ -69,7 +48,8 @@ def get_gpu_memory_info() -> Optional[Tuple[int, int]]:
         Tuple of (used_mb, total_mb) or None if unavailable.
     """
     try:
-        if HAS_CUML and HAS_CUDA:
+        if HAS_CUML and _check_cuda():
+            import cupy as cp
             meminfo = cp.cuda.Device().mem_info
             free_bytes, total_bytes = meminfo
             used_bytes = total_bytes - free_bytes
@@ -177,10 +157,11 @@ def reduce_dim(embeddings: np.ndarray, method: str = "PCA", seed: Optional[int] 
     embeddings = _prepare_embeddings(embeddings, "reduce_dim")
 
     # Determine which backend to use
+    cuda_available = _check_cuda()
     use_cuml = False
-    if backend == "cuml" and HAS_CUML and HAS_CUDA:
+    if backend == "cuml" and HAS_CUML and cuda_available:
         use_cuml = True
-    elif backend == "auto" and HAS_CUML and HAS_CUDA and n_samples > 5000:
+    elif backend == "auto" and HAS_CUML and cuda_available and n_samples > 5000:
         # Use cuML automatically for large datasets on GPU
         use_cuml = True
 
@@ -199,6 +180,9 @@ def reduce_dim(embeddings: np.ndarray, method: str = "PCA", seed: Optional[int] 
 
 def _reduce_dim_sklearn(embeddings: np.ndarray, method: str, seed: Optional[int], n_workers: int):
     """Dimensionality reduction using sklearn/umap backends."""
+    from sklearn.decomposition import PCA
+    from sklearn.manifold import TSNE
+
     # Use -1 (all available cores) instead of specific values > 1 to avoid
     # thread count restrictions on HPC clusters (OMP_NUM_THREADS, SLURM cgroups)
     effective_workers = -1 if n_workers > 1 else n_workers
@@ -215,6 +199,7 @@ def _reduce_dim_sklearn(embeddings: np.ndarray, method: str, seed: Optional[int]
         else:
             reducer = TSNE(n_components=2, perplexity=perplexity, n_jobs=effective_workers)
     elif method.upper() == "UMAP":
+        from umap import UMAP
         # Adjust n_neighbors to be valid for the sample size
         n_samples = embeddings.shape[0]
         n_neighbors = min(15, max(2, n_samples - 1))
@@ -234,6 +219,8 @@ def _reduce_dim_cuml(embeddings: np.ndarray, method: str, seed: Optional[int], n
     Expects embeddings to already be L2-normalized float32 from _prepare_embeddings().
     """
     try:
+        import cupy as cp
+
         if method.upper() == "UMAP":
             # cuML UMAP can crash with SIGFPE on certain data distributions
             # (NN-descent numerical instability).  SIGFPE is a signal, not a
@@ -245,8 +232,10 @@ def _reduce_dim_cuml(embeddings: np.ndarray, method: str, seed: Optional[int], n
         embeddings_gpu = cp.asarray(embeddings, dtype=cp.float32)
 
         if method.upper() == "PCA":
+            from cuml.decomposition import PCA as cuPCA
             reducer = cuPCA(n_components=2)
         elif method.upper() == "TSNE":
+            from cuml.manifold import TSNE as cuTSNE
             n_samples = embeddings.shape[0]
             perplexity = min(30, max(5, n_samples // 3))
 
@@ -369,7 +358,8 @@ def run_kmeans(embeddings: np.ndarray, n_clusters: int, seed: Optional[int] = No
     start_time = time.time()
 
     # Determine which backend to use
-    if backend == "cuml" and HAS_CUML and HAS_CUDA:
+    cuda_available = _check_cuda()
+    if backend == "cuml" and HAS_CUML and cuda_available:
         logger.info("Using cuML backend for KMeans")
         result = _run_kmeans_cuml(embeddings, n_clusters, seed, n_workers)
     elif backend == "faiss" and HAS_FAISS:
@@ -377,7 +367,7 @@ def run_kmeans(embeddings: np.ndarray, n_clusters: int, seed: Optional[int] = No
         result = _run_kmeans_faiss(embeddings, n_clusters, seed, n_workers)
     elif backend == "auto":
         # Auto selection priority: cuML > FAISS > sklearn
-        if HAS_CUML and HAS_CUDA and n_samples > 500:
+        if HAS_CUML and cuda_available and n_samples > 500:
             logger.info("Auto-selected cuML backend for KMeans (GPU available, large dataset)")
             result = _run_kmeans_cuml(embeddings, n_clusters, seed, n_workers)
         elif HAS_FAISS and n_samples > 500:
@@ -398,9 +388,12 @@ def run_kmeans(embeddings: np.ndarray, n_clusters: int, seed: Optional[int] = No
 def _run_kmeans_cuml(embeddings: np.ndarray, n_clusters: int, seed: Optional[int] = None, n_workers: int = 1):
     """KMeans using cuML GPU backend."""
     try:
+        import cupy as cp
+        from cuml.cluster import KMeans as cuKMeans
+
         # Convert to cupy array for GPU processing
         embeddings_gpu = cp.asarray(embeddings, dtype=cp.float32)
-        
+
         # Create cuML KMeans object
         if seed is not None:
             kmeans = cuKMeans(
@@ -417,10 +410,10 @@ def _run_kmeans_cuml(embeddings: np.ndarray, n_clusters: int, seed: Optional[int
                 init='k-means++',
                 tol=1e-4
             )
-        
+
         # Fit and predict on GPU
         labels_gpu = kmeans.fit_predict(embeddings_gpu)
-        
+
         # Convert results back to numpy
         labels = cp.asnumpy(labels_gpu)
         centroids = cp.asnumpy(kmeans.cluster_centers_)
@@ -441,6 +434,7 @@ def _run_kmeans_cuml(embeddings: np.ndarray, n_clusters: int, seed: Optional[int
 
 def _run_kmeans_sklearn(embeddings: np.ndarray, n_clusters: int, seed: Optional[int] = None):
     """KMeans using scikit-learn backend."""
+    from sklearn.cluster import KMeans
     if seed is not None:
         kmeans = KMeans(n_clusters=n_clusters, random_state=seed)
     else:

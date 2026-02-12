@@ -1,6 +1,7 @@
 """Tests for shared/utils/clustering.py."""
 
 import subprocess
+import sys
 from unittest.mock import patch, MagicMock
 
 import numpy as np
@@ -12,6 +13,7 @@ from shared.utils.clustering import (
     reduce_dim,
     run_kmeans,
     _reduce_dim_sklearn,
+    _reduce_dim_cuml,
     _run_kmeans_sklearn,
     _run_cuml_umap_subprocess,
 )
@@ -154,25 +156,16 @@ class TestRunKmeans:
 class TestGPUFallback:
     def test_reduce_dim_cuml_fallback(self, sample_embeddings_small):
         """When cuML cp.asarray raises RuntimeError, _reduce_dim_cuml falls back to sklearn."""
-        import shared.utils.clustering as clust_mod
-
-        # Mock cupy so the cuML code path can execute, then fail
+        # Mock cupy so the cuML code path can execute, then fail on cp.asarray
         mock_cp = MagicMock()
         mock_cp.asarray.side_effect = RuntimeError("CUDA error: no kernel image")
         mock_cp.float32 = np.float32
 
-        original_cp = getattr(clust_mod, "cp", None)
-        clust_mod.cp = mock_cp
-        try:
-            from shared.utils.clustering import _reduce_dim_cuml
+        # Patch the 'import cupy as cp' inside _reduce_dim_cuml
+        with patch.dict(sys.modules, {"cupy": mock_cp}):
             emb = sample_embeddings_small.astype(np.float32)
             result = _reduce_dim_cuml(emb, "PCA", seed=42, n_workers=1)
             assert result.shape == (10, 2)
-        finally:
-            if original_cp is not None:
-                clust_mod.cp = original_cp
-            else:
-                delattr(clust_mod, "cp")
 
     def test_umap_subprocess_crash_raises(self, sample_embeddings_small):
         """Subprocess returning non-zero should raise RuntimeError."""
