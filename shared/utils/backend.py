@@ -35,7 +35,7 @@ def check_cuda_available() -> Tuple[bool, str]:
             logger.info(f"CUDA available via PyTorch: {device_name}")
             return _cuda_check_cache
     except ImportError:
-        pass
+        pass  # PyTorch not installed, try CuPy next
 
     # Try CuPy
     try:
@@ -47,7 +47,7 @@ def check_cuda_available() -> Tuple[bool, str]:
             logger.info(f"CUDA available via CuPy: {device_info}")
             return _cuda_check_cache
     except ImportError:
-        pass
+        pass  # CuPy not installed, fall through to CPU-only
 
     _cuda_check_cache = (False, "CPU only")
     logger.info("CUDA not available, using CPU")

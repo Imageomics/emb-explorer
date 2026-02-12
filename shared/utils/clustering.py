@@ -75,7 +75,7 @@ def get_gpu_memory_info() -> Optional[Tuple[int, int]]:
             used_bytes = total_bytes - free_bytes
             return (used_bytes // (1024 * 1024), total_bytes // (1024 * 1024))
     except Exception:
-        pass
+        pass  # GPU memory query via CuPy failed; try PyTorch next
 
     try:
         import torch
@@ -84,7 +84,7 @@ def get_gpu_memory_info() -> Optional[Tuple[int, int]]:
             total = torch.cuda.get_device_properties(0).total_memory // (1024 * 1024)
             return (used, total)
     except Exception:
-        pass
+        pass  # GPU memory query via PyTorch failed; return None
 
     return None
 
@@ -343,7 +343,7 @@ def _run_cuml_umap_subprocess(embeddings: np.ndarray, seed: Optional[int]) -> np
             try:
                 os.unlink(path)
             except OSError:
-                pass
+                pass  # Best-effort cleanup of temp IPC files
 
 def run_kmeans(embeddings: np.ndarray, n_clusters: int, seed: Optional[int] = None, n_workers: int = 1, backend: str = "auto"):
     """

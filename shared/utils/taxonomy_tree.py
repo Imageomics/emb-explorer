@@ -25,15 +25,22 @@ def build_taxonomic_tree(df: pd.DataFrame) -> Dict[str, Any]:
     tree = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(
         lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(int)))))))
 
+    def _val(row, col):
+        """Get column value, replacing NaN/None/empty with 'Unknown'."""
+        v = row.get(col, 'Unknown')
+        if pd.isna(v) or v == '':
+            return 'Unknown'
+        return v
+
     for _, row in df_clean.iterrows():
         # Get values for each taxonomic level, using 'Unknown' for nulls
-        kingdom = row.get('kingdom', 'Unknown') or 'Unknown'
-        phylum = row.get('phylum', 'Unknown') or 'Unknown'
-        class_name = row.get('class', 'Unknown') or 'Unknown'
-        order = row.get('order', 'Unknown') or 'Unknown'
-        family = row.get('family', 'Unknown') or 'Unknown'
-        genus = row.get('genus', 'Unknown') or 'Unknown'
-        species = row.get('species', 'Unknown') or 'Unknown'
+        kingdom = _val(row, 'kingdom')
+        phylum = _val(row, 'phylum')
+        class_name = _val(row, 'class')
+        order = _val(row, 'order')
+        family = _val(row, 'family')
+        genus = _val(row, 'genus')
+        species = _val(row, 'species')
 
         # Build the nested structure
         tree[kingdom][phylum][class_name][order][family][genus][species] += 1

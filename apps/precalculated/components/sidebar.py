@@ -392,7 +392,7 @@ def render_dynamic_filters() -> Dict[str, Any]:
                 preview_count = len(preview_table)
                 st.info(f"📊 Preview: **{preview_count:,}** records match current filters")
             except Exception:
-                pass
+                logger.debug("Filter preview count failed", exc_info=True)
 
         # Apply filters button
         col1, col2 = st.columns([1, 1])
@@ -489,7 +489,7 @@ def apply_filters_arrow(table: pa.Table, filters: Dict[str, Any]) -> pa.Table:
     if filter_expressions:
         from functools import reduce
         try:
-            combined = reduce(lambda a, b: pc.and_kleene(a, b), filter_expressions)
+            combined = reduce(pc.and_kleene, filter_expressions)
             return table.filter(combined)
         except AttributeError:
             # Fallback for older PyArrow

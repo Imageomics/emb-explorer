@@ -33,7 +33,7 @@ dependencies = [
     # Core UI and web framework
     "streamlit>=1.50.0",
     # Data processing and numerical computing
-    "numpy<=2.2.0",
+    "numpy<=2.2.0",  # capped: cuML/numba require numpy <2.3 as of 2025
     "pandas>=2.0.0",
     "pillow>=9.0.0",
     "pyarrow>=10.0.0",
@@ -76,7 +76,7 @@ gpu-cu12 = [
 gpu-cu13 = [
     "torch>=2.0.0",
     "cuml-cu13>=25.12",
-    "faiss-gpu-cu12>=1.11.0",
+    "faiss-gpu-cu12>=1.11.0",  # no cu13 build on PyPI; cu12 works via CUDA backward compat
     "pynvml>=11.0.0",
 ]
 # Minimal GPU support (just PyTorch + FAISS GPU, no RAPIDS)
@@ -145,3 +145,4 @@ python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-v --tb=short"
+markers = ["gpu: requires GPU hardware (deselect with '-m not gpu')"]

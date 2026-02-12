@@ -19,7 +19,6 @@ def render_scatter_plot():
     user clicks a *different* point.
     """
     df_plot = st.session_state.get("data", None)
-    labels = st.session_state.get("labels", None)
 
     if df_plot is not None and len(df_plot) > 1:
         _render_chart_fragment(df_plot)

@@ -42,10 +42,10 @@ def main():
     )
 
     # Row 1: File loading
-    file_loaded, file_path = render_file_section()
+    render_file_section()
 
     # Row 2: Dynamic filters
-    filters = render_dynamic_filters()
+    render_dynamic_filters()
 
     # Row 3: Main content
     col_settings, col_plot, col_preview = st.columns([2, 7, 3])

@@ -29,7 +29,7 @@ def main():
 
     with col_settings:
         # Render the sidebar with all controls
-        sidebar_state = render_clustering_sidebar()
+        render_clustering_sidebar()
 
     with col_plot:
         # Render the main scatter plot
