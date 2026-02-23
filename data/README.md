@@ -2,7 +2,7 @@
 
 `example_1k.parquet`: a small sample for trying out the Precalculated Embedding Exploration app.
 
-It contains 1,030 randomly sampled images from [TreeOfLife-200M](https://huggingface.co/datasets/imageomics/TreeOfLife-200M), embedded with [BioCLIP 2](https://huggingface.co/imageomics/bioclip-2). Taxonomic information and other metadata comes from `catalog.parquet` in the TOL-200M repo.
+It contains [BioCLIP 2](https://huggingface.co/imageomics/bioclip-2) embeddings for 1,030 randomly sampled images from [TreeOfLife-200M](https://huggingface.co/datasets/imageomics/TreeOfLife-200M) (embeddings only, not the images themselves). Taxonomic information and other metadata comes from `catalog.parquet` in the TOL-200M repo.
 
 ## Schema
 

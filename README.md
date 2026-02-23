@@ -1,13 +1,13 @@
 # emb-explorer
 
-Visual exploration and clustering tool for image embeddings.
+Visual exploration and clustering tool for image embeddings. Users can either bring pre-calculated embeddings to explore, or use the interface to embed their images and then explore those embeddings.
 
 ## Screenshots
 
 <table>
   <tr>
     <td width="50%" align="center"><b>Embed & Explore</b></td>
-    <td width="50%" align="center"><b>Precalculated Embeddings</b></td>
+    <td width="50%" align="center"><b>Precalculated Embedding Exploration</b></td>
   </tr>
   <tr>
     <td><img src="docs/images/app_screenshot_1.png" alt="Embedding Interface" width="100%"></td>

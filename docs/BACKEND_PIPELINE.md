@@ -39,7 +39,7 @@ Input norms are logged so you can always verify what came in.
 
 ## Step 1: KMeans Clustering
 
-Clusters the full high-dimensional embeddings (e.g., 768-d for BioCLIP).
+Clusters the full high-dimensional embeddings (e.g., 768-d for BioCLIP 2).
 Runs *before* dimensionality reduction so clusters are based on the full
 feature space, not a lossy 2D projection.
 
@@ -99,7 +99,7 @@ When you select "auto" (the default), the app picks the fastest available backen
 | KMeans | cuML if GPU + >500 samples, else FAISS if available + >500 samples, else sklearn |
 | Dim. Reduction | cuML if GPU + >5000 samples, else sklearn |
 
-Any GPU error (architecture mismatch, missing libraries, OOM) triggers an
+Any GPU error (architecture mismatch, missing libraries, out of memory (OOM)) triggers an
 automatic retry with sklearn. OOM errors are surfaced to the user with guidance.
 
 ## Logging
