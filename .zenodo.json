@@ -16,6 +16,11 @@
       "affiliation": "The Ohio State University"
     },
     {
+      "name": "Hilmar, Lapp",
+      "orcid": "0000-0001-9107-0714",
+      "affiliation": "Neuromatch, Inc."
+    },
+    {
       "name": "Menon, Sreejith",
       "orcid": "0009-0009-6277-2413",
       "affiliation": "Google"
@@ -31,11 +36,7 @@
       "affiliation": "The Ohio State University"
     }
   ],
-  "title": "emb-explorer",
   "description": "Image clustering tool using embeddings with Streamlit interface. Supports GPU-accelerated dimensionality reduction and clustering with automatic CPU fallback.",
-  "version": "0.1.0",
-  "license": {"id": "MIT"},
-  "publication_date": "2026-02-26",
   "keywords": [
     "imageomics",
     "embeddings",
@@ -43,6 +44,13 @@
     "visualization",
     "image-analysis"
   ],
+  "title": "emb-explorer",
+
+  "version": "0.1.0",
+  
+  "license": {"id": "MIT"},
+  "publication_date": "2026-02-26",
+  
   "grants": [
     {"id": "021nxhr62::2118240"}
   ]
