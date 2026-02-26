@@ -34,14 +34,13 @@
   "title": "emb-explorer",
   "description": "Image clustering tool using embeddings with Streamlit interface. Supports GPU-accelerated dimensionality reduction and clustering with automatic CPU fallback.",
   "version": "0.1.0",
-  "license": "MIT",
+  "license": {"id": "MIT"},
   "publication_date": "2026-02-26",
   "keywords": [
     "imageomics",
     "embeddings",
     "clustering",
     "visualization",
-    "streamlit",
     "image-analysis"
   ],
   "grants": [
