@@ -53,5 +53,11 @@
   
   "grants": [
     {"id": "021nxhr62::2118240"}
+  ],
+
+  "references": [
+    "Ilharco, G., Wortsman, M., Wightman, R., Gordon, C., Carlini, N., Taori, R., Dave, A., Shankar, V., Namkoong, H., Miller, J., Hajishirzi, H., Farhadi, A., & Schmidt, L. (2021). OpenCLIP [Computer software]. Zenodo. https://doi.org/10.5281/zenodo.5143773",
+    "VanderPlas, J., Granger, B. E., Heer, J., Moritz, D., Wongsuphasawat, K., Satyanarayan, A., Lees, E., Timofeev, I., Welsh, B., & Sievert, S. (2018). Altair: Interactive Statistical Visualizations for Python. Journal of Open Source Software, 3(32), 1057. https://doi.org/10.21105/joss.01057",
+    "Streamlit (Version 1.40.0) [Computer software]. (2024). Snowflake Inc. https://github.com/streamlit/streamlit"
   ]
 }
