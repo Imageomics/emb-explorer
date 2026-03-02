@@ -1,4 +1,5 @@
-# emb-explorer
+# Image Embedding Explorer
+[![DOI](https://zenodo.org/badge/1001126795.svg)](https://doi.org/10.5281/zenodo.18841337)
 
 **emb-explorer** is a Streamlit-based visual exploration and clustering tool for image datasets and pre-calculated image embeddings. 
 
