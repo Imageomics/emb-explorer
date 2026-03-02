@@ -76,7 +76,7 @@ list-models          # List available embedding models
 
 ### Example Data
 
-An example dataset (`data/example_1k.parquet`) is provided with BioCLIP 2 embeddings for testing.
+An example dataset (`data/example_1k.parquet`) is provided with BioCLIP 2 embeddings for testing. Please see the [data README](data/README.md) for more information about this sample set.
 
 ### Remote HPC Usage
 
