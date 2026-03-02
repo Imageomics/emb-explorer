@@ -1,193 +1,96 @@
 # Image Embedding Explorer
 [![DOI](https://zenodo.org/badge/1001126795.svg)](https://doi.org/10.5281/zenodo.18841337)
 
-**emb-explorer** is a Streamlit-based visual exploration and clustering tool for image datasets and pre-calculated image embeddings. 
+Visual exploration and clustering tool for image embeddings. Users can either bring pre-calculated embeddings to explore, or use the interface to embed their images and then explore those embeddings.
 
-## 🎯 Demo Screenshots
+## Screenshots
 
 <table>
   <tr>
-    <td width="50%" align="center">
-      <h3>📊 Embed & Explore Images</h3>
-    </td>
-    <td width="50%" align="center">
-      <h3>🔍 Explore Pre-calculated Embeddings</h3>
-    </td>
+    <td width="50%" align="center"><b>Embed & Explore</b></td>
+    <td width="50%" align="center"><b>Precalculated Embedding Exploration</b></td>
   </tr>
   <tr>
-    <td width="50%">
-      <h4>Embedding Interface</h4>
-      <img src="docs/images/app_screenshot_1.png" alt="Embedding Clusters" width="100%">
-      <p><em>Embed your images using pre-trained models</em></p>
-    </td>
-    <td width="50%">
-      <h4>Smart Filtering</h4>
-      <img src="docs/images/app_screenshot_filter.png" alt="Precalculated Embedding Filters" width="100%">
-      <p><em>Apply filters to pre-calculated embeddings</em></p>
-    </td>
+    <td><img src="docs/images/app_screenshot_1.png" alt="Embedding Interface" width="100%"></td>
+    <td><img src="docs/images/app_screenshot_filter.png" alt="Smart Filtering" width="100%"></td>
   </tr>
   <tr>
-    <td width="50%">
-      <h4>Cluster Summary</h4>
-      <img src="docs/images/app_screenshot_2.png" alt="Cluster Summary" width="100%">
-      <p><em>Analyze clustering results and representative images</em></p>
-    </td>
-    <td width="50%">
-      <h4>Interactive Exploration</h4>
-      <img src="docs/images/app_screenshot_cluster.png" alt="Precalculated Embedding Clusters" width="100%">
-      <p><em>Explore clusters with interactive visualization</em></p>
-    </td>
+    <td><img src="docs/images/app_screenshot_2.png" alt="Cluster Summary" width="100%"></td>
+    <td><img src="docs/images/app_screenshot_cluster.png" alt="Interactive Exploration" width="100%"></td>
   </tr>
   <tr>
-    <td width="50%">
-      <!-- Empty cell for Page 1 -->
-    </td>
-    <td width="50%">
-      <h4>Taxonomy Tree Navigation</h4>
-      <img src="docs/images/app_screenshot_taxon_tree.png" alt="Precalculated Embedding Taxon Tree" width="100%">
-      <p><em>Browse hierarchical taxonomy structure</em></p>
-    </td>
+    <td></td>
+    <td><img src="docs/images/app_screenshot_taxon_tree.png" alt="Taxonomy Tree" width="100%"></td>
   </tr>
 </table>
 
-
 ## Features
 
-### Embed & Explore Images from Upload
+**Embed & Explore** - Embed images using pretrained models (CLIP, BioCLIP), cluster with K-Means, visualize with PCA/t-SNE/UMAP, and repartition images by cluster.
 
-* **Batch Image Embedding:**
-  Efficiently embed large collections of images using the pretrained model (e.g., CLIP, BioCLIP) on CPU or GPU (preferably), with customizable batch size and parallelism. 
-* **Clustering:**
-  Reduces embedding vectors to 2D using PCA, T-SNE, and UMAP. Performs K-Means clustering and display result using a scatter plot. Explore clusters via interactive scatter plots. Click on data points to preview images and details.
-* **Cluster-Based Repartitioning:**
-  Copy/repartition images into cluster-specific folders with a single click. Generates a summary CSV for downstream use.
-* **Clustering Summary:**
-  Displays cluster sizes, variances, and representative images for each cluster, helping you evaluate clustering quality.
-
-### Explore Pre-computed Embeddings
-
-* **Parquet File Support:**
-  Load precomputed embeddings with associated metadata from parquet files. Compatible with various embedding formats and metadata schemas.
-* **Advanced Filtering:**
-  Filter datasets by taxonomic hierarchy, source datasets, and custom metadata fields. Combine multiple filter criteria for precise data selection.
-* **Clustering:**
-  Reduce embedding vectors to 2D using PCA, UMAP, or t-SNE. Perform K-Means clustering and display result using a scatter plot. Explore clusters via interactive scatter plots. Click on points to preview images and explore metadata details.
-* **Taxonomy Tree Navigation:**
-  Browse hierarchical biological classifications with interactive tree view. Expand and collapse taxonomic nodes to explore at different classification levels.
+**Precalculated Embeddings** - Load parquet files (or directories of parquets) with precomputed embeddings, apply dynamic cascading filters, and explore clusters with taxonomy tree navigation. See [Data Format](docs/DATA_FORMAT.md) for the expected schema and [Backend Pipeline](docs/BACKEND_PIPELINE.md) for how embeddings flow through clustering and visualization.
 
 ## Installation
 
-[uv](https://docs.astral.sh/uv/) is a fast Python package installer and resolver. Install `uv` first if you haven't already:
-
 ```bash
-# Install uv (if not already installed)
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
-
-Then install the project:
-
-```bash
-# Clone the repository
 git clone https://github.com/Imageomics/emb-explorer.git
 cd emb-explorer
 
-# Create virtual environment and install dependencies
-uv venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+# Using uv (recommended)
+uv venv && source .venv/bin/activate
 uv pip install -e .
 ```
 
-### GPU Support (Optional)
+### GPU Acceleration (optional)
 
-For GPU acceleration, you'll need CUDA 12.0+ installed on your system.
-
-```bash
-# Full GPU support with RAPIDS (cuDF + cuML)
-uv pip install -e ".[gpu]"
-
-# Minimal GPU support (PyTorch + FAISS only)
-uv pip install -e ".[gpu-minimal]"
-```
-
-### Development
+A GPU is **not required** — everything works on CPU out of the box. But if you have an NVIDIA GPU with CUDA, clustering and dimensionality reduction (KMeans, t-SNE, UMAP) will be significantly faster via [cuML](https://docs.rapids.ai/api/cuml/stable/).
 
 ```bash
-# Install with development tools
-uv pip install -e ".[dev]"
+# CUDA 12.x 
+uv pip install -e ".[gpu-cu12]"
+
+# CUDA 13.x
+uv pip install -e ".[gpu-cu13]"
 ```
+
+The app auto-detects GPU availability at runtime and falls back to CPU if anything goes wrong — no configuration needed. You can also manually select backends (cuML, FAISS, sklearn) in the sidebar.
 
 ## Usage
 
-### Running the Application
+### Standalone Apps
 
 ```bash
-# Activate virtual environment (if not already activated)
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+# Embed & Explore - Interactive image embedding and clustering
+streamlit run apps/embed_explore/app.py
 
-# Run the Streamlit app
-streamlit run app.py
+# Precalculated Embeddings - Explore precomputed embeddings from parquet
+streamlit run apps/precalculated/app.py
 ```
 
-An example dataset (`example_1k.parquet`) is provided in the `data/` folder for testing the pre-calculated embeddings features. This parquet contains metadata and the [BioCLIP 2](https://imageomics.github.io/bioclip-2/) embeddings for a one thousand-image subset of [TreeOfLife-200M](https://huggingface.co/datasets/imageomics/TreeOfLife-200M).
-
-### Command Line Tools
-
-The project also provides command-line utilities:
+### Entry Points (after pip install)
 
 ```bash
-# List all available models
-python list_models.py --format table
-
-# List models in JSON format
-python list_models.py --format json --pretty
-
-# List models as names only
-python list_models.py --format names
-
-# Get help for the list models command
-python list_models.py --help
+emb-embed-explore    # Launch Embed & Explore app
+emb-precalculated    # Launch Precalculated Embeddings app
+list-models          # List available embedding models
 ```
 
-### Running on Remote Compute Nodes
+### Example Data
 
-If running the app on a remote compute node (e.g., HPC cluster), you'll need to set up port forwarding to access the Streamlit interface from your local machine.
+An example dataset (`data/example_1k.parquet`) is provided with BioCLIP 2 embeddings for testing. Please see the [data README](data/README.md) for more information about this sample set.
 
-1. **Start the app on the compute node:**
-   ```bash
-   # On the remote compute node
-   streamlit run app.py
-   ```
-   Note the port number (default is 8501) and the compute node hostname.
+### Remote HPC Usage
 
-2. **Set up SSH port forwarding from your local machine:**
-   ```bash
-   # From your local machine
-   ssh -N -L 8501:<COMPUTE_NODE>:8501 <USERNAME>@<LOGIN_NODE>
-   ```
-   
-   **Example:**
-   ```bash
-   ssh -N -L 8501:c0828.ten.osc.edu:8501 username@cardinal.osc.edu
-   ```
-   
-   Replace:
-   - `<COMPUTE_NODE>` with the actual compute node hostname (e.g., `c0828.ten.osc.edu`)
-   - `<USERNAME>` with your username
-   - `<LOGIN_NODE>` with the login node address (e.g., `cardinal.osc.edu`)
+```bash
+# On compute node
+streamlit run apps/precalculated/app.py --server.port 8501
 
-3. **Access the app:**
-   Open your web browser and navigate to `http://localhost:8501`
+# On local machine (port forwarding)
+ssh -N -L 8501:<COMPUTE_NODE>:8501 <USER>@<LOGIN_NODE>
 
-The `-N` flag prevents SSH from executing remote commands, and `-L` sets up the local port forwarding.
-
-### Notes on Implementation
-
-More notes on different implementation methods and approaches are available in the [implementation summary doc](docs/implementation_summary.md).
+# Access at http://localhost:8501
+```
 
 ## Acknowledgements
 
-* [OpenCLIP](https://github.com/mlfoundations/open_clip)
-* [Streamlit](https://streamlit.io/)
-* [Altair](https://altair-viz.github.io/)
-
----
+[OpenCLIP](https://github.com/mlfoundations/open_clip) | [Streamlit](https://streamlit.io/) | [Altair](https://altair-viz.github.io/)

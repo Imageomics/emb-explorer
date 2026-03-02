@@ -1,3 +1,0 @@
-"""
-Shared components package.
-"""
