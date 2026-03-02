@@ -38,10 +38,9 @@ identifiers:
   - description: "The GitHub release URL of tag v0.1.0." 
     type: url
     value: "https://github.com/Imageomics/emb-explorer/releases/tag/v0.1.0"
-  # TODO: update after release
   - description: "The GitHub URL of the commit tagged with v0.1.0."
     type: url
-    value: "https://github.com/Imageomics/emb-explorer/tree/<commit-hash>"
+    value: "https://github.com/Imageomics/emb-explorer/tree/c51be4ef536f5f87fc4f49619ff764c10e103416"
 keywords:
   - imageomics
   - embeddings
@@ -53,5 +52,5 @@ message: "If you find this software helpful in your research, please cite both t
 repository-code: "https://github.com/Imageomics/emb-explorer"
 title: "Image Embedding Explorer"
 version: 0.1.0
-doi: <DOI from Zenodo>    # TODO: update after ZENODO release
+doi: 10.5281/zenodo.18841337
 type: software
