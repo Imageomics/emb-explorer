@@ -52,7 +52,7 @@ keywords:
 license: MIT
 message: "If you find this software helpful in your research, please cite both the software."
 repository-code: "https://github.com/Imageomics/emb-explorer"
-title: "emb-explorer"
+title: "Image Embedding Explorer"
 version: 0.1.0
 doi: <DOI from Zenodo>    # TODO: update after ZENODO release
 type: software
