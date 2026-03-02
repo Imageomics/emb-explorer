@@ -1,0 +1,56 @@
+abstract: >-
+  Image clustering tool using embeddings with Streamlit interface.
+  Supports GPU-accelerated dimensionality reduction and clustering
+  with automatic CPU fallback.
+authors:
+  - family-names: Zhang
+    given-names: Net
+    orcid: "https://orcid.org/0000-0003-2664-451X"
+    affiliation: The Ohio State University
+  - family-names: Campolongo
+    given-names: Elizabeth G.
+    orcid: "https://orcid.org/0000-0003-0846-2413"
+    affiliation: The Ohio State University
+  - family-names: Thompson
+    given-names: Matthew J.
+    orcid: "https://orcid.org/0000-0003-0583-8585"
+    affiliation: The Ohio State University
+  - family-names: Hilmar
+    given-names: Lapp
+    affiliation: Neuromatch, Inc.
+    orcid: "https://orcid.org/0000-0001-9107-0714"
+    affiliation: The Ohio State University
+  - family-names: Menon
+    given-names: Sreejith
+    orcid: "https://orcid.org/0009-0009-6277-2413"
+    affiliation: Google
+  - family-names: Gu
+    given-names: Jianyang
+    orcid: "https://orcid.org/0000-0002-4060-7427"
+    affiliation: The Ohio State University
+  - family-names: Nandi
+    given-names: Arnab
+    orcid: "https://orcid.org/0000-0002-4138-603X"
+    affiliation: The Ohio State University
+cff-version: 1.2.0
+date-released: "2026-03-02"
+identifiers:
+  - description: "The GitHub release URL of tag v0.1.0." 
+    type: url
+    value: "https://github.com/Imageomics/emb-explorer/releases/tag/v0.1.0"
+  - description: "The GitHub URL of the commit tagged with v0.1.0."
+    type: url
+    value: "https://github.com/Imageomics/emb-explorer/tree/c51be4ef536f5f87fc4f49619ff764c10e103416"
+keywords:
+  - imageomics
+  - embeddings
+  - clustering
+  - visualization
+  - image-analysis
+license: MIT
+message: "If you find this software helpful in your research, please cite both the software."
+repository-code: "https://github.com/Imageomics/emb-explorer"
+title: "Image Embedding Explorer"
+version: 0.1.0
+doi: 10.5281/zenodo.18841337
+type: software

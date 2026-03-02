@@ -1,4 +1,5 @@
-# emb-explorer
+# Image Embedding Explorer
+[![DOI](https://zenodo.org/badge/1001126795.svg)](https://doi.org/10.5281/zenodo.18841337)
 
 Visual exploration and clustering tool for image embeddings. Users can either bring pre-calculated embeddings to explore, or use the interface to embed their images and then explore those embeddings.
 
