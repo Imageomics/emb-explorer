@@ -35,12 +35,11 @@ authors:
 cff-version: 1.2.0
 date-released: "2026-02-26"
 identifiers:
-  # TODO: update after release 
-  - description: "The GitHub release URL of tag <version>." 
+  - description: "The GitHub release URL of tag v0.1.0." 
     type: url
-    value: "https://github.com/Imageomics/emb-explorer/releases/tag/<tag-name>"
+    value: "https://github.com/Imageomics/emb-explorer/releases/tag/v0.1.0"
   # TODO: update after release
-  - description: "The GitHub URL of the commit tagged with <tag-name>."
+  - description: "The GitHub URL of the commit tagged with v0.1.0."
     type: url
     value: "https://github.com/Imageomics/emb-explorer/tree/<commit-hash>"
 keywords:
