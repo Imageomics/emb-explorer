@@ -33,14 +33,14 @@ authors:
     orcid: "https://orcid.org/0000-0002-4138-603X"
     affiliation: The Ohio State University
 cff-version: 1.2.0
-date-released: "2026-03-02"
+date-released: "2026-03-03"
 identifiers:
-  - description: "The GitHub release URL of tag v0.1.0." 
+  - description: "The GitHub release URL of tag v1.0.0." 
     type: url
-    value: "https://github.com/Imageomics/emb-explorer/releases/tag/v0.1.0"
-  - description: "The GitHub URL of the commit tagged with v0.1.0."
+    value: "https://github.com/Imageomics/emb-explorer/releases/tag/v1.0.0"
+  - description: "The GitHub URL of the commit tagged with v1.0.0."
     type: url
-    value: "https://github.com/Imageomics/emb-explorer/tree/c51be4ef536f5f87fc4f49619ff764c10e103416"
+    value: "https://github.com/Imageomics/emb-explorer/tree/<commit-hash>" # update on release
 keywords:
   - imageomics
   - embeddings
@@ -51,6 +51,6 @@ license: MIT
 message: "If you find this software helpful in your research, please cite both the software."
 repository-code: "https://github.com/Imageomics/emb-explorer"
 title: "Image Embedding Explorer"
-version: 0.1.0
+version: 1.0.0
 doi: 10.5281/zenodo.18841337
 type: software

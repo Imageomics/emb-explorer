@@ -46,10 +46,10 @@
   ],
   "title": "Image Embedding Explorer",
 
-  "version": "0.1.0",
+  "version": "1.0.0",
   
   "license": {"id": "MIT"},
-  "publication_date": "2026-03-02",
+  "publication_date": "2026-03-03",
   
   "grants": [
     {"id": "021nxhr62::2118240"}
