@@ -40,7 +40,7 @@ identifiers:
     value: "https://github.com/Imageomics/emb-explorer/releases/tag/v1.0.0"
   - description: "The GitHub URL of the commit tagged with v1.0.0."
     type: url
-    value: "https://github.com/Imageomics/emb-explorer/commit/b1c3c695e524ec07ef5e77ee4ca85ab13b772667"
+    value: "https://github.com/Imageomics/emb-explorer/tree" # update on release
 keywords:
   - imageomics
   - embeddings
