@@ -32,12 +32,14 @@ Visual exploration and clustering tool for image embeddings. Users can either br
 
 ## Installation
 
+Requires Python 3.10–3.13. We recommend using [uv](https://github.com/astral-sh/uv) for package management.
+
 ```bash
 git clone https://github.com/Imageomics/emb-explorer.git
 cd emb-explorer
 
-# Using uv (recommended)
-uv venv && source .venv/bin/activate
+# Create venv with Python 3.12 (3.14+ not yet supported by GPU dependencies)
+uv venv --python 3.12 && source .venv/bin/activate
 uv pip install -e .
 ```
 
