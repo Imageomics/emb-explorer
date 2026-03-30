@@ -5,7 +5,7 @@ from apps.precalculated.components.sidebar import (
     render_dynamic_filters,
     render_clustering_section,
 )
-from apps.precalculated.components.data_preview import render_data_preview
+from apps.precalculated.components.data_preview import render_data_preview, render_cluster_analysis
 from apps.precalculated.components.visualization import render_scatter_plot
 
 __all__ = [
@@ -13,5 +13,6 @@ __all__ = [
     "render_dynamic_filters",
     "render_clustering_section",
     "render_data_preview",
+    "render_cluster_analysis",
     "render_scatter_plot",
 ]

@@ -12,7 +12,7 @@ from apps.precalculated.components.sidebar import (
     render_dynamic_filters,
     render_clustering_section,
 )
-from apps.precalculated.components.data_preview import render_data_preview
+from apps.precalculated.components.data_preview import render_data_preview, render_cluster_analysis
 from shared.components.visualization import render_scatter_plot
 from shared.components.summary import render_clustering_summary
 
@@ -69,8 +69,9 @@ def app():
     with col_preview:
         render_data_preview()
 
-    # Bottom: Clustering summary
+    # Bottom: Cluster analysis (evaluation mode) + taxonomy summary
     st.markdown("---")
+    render_cluster_analysis()
     render_clustering_summary(show_taxonomy=True)
 
 

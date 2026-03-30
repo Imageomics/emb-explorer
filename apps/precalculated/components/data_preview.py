@@ -5,6 +5,7 @@ Dynamically displays all available metadata fields.
 
 import streamlit as st
 import pandas as pd
+import numpy as np
 import requests
 import time
 from typing import Optional
@@ -80,10 +81,32 @@ def get_image_from_url(url: str) -> Optional[Image.Image]:
 
 
 def render_data_preview():
-    """Render the data preview panel with dynamic field display."""
+    """Render the data preview panel (record details on point click)."""
+    _render_record_details()
+
+
+def render_cluster_analysis():
+    """Render cluster analysis section (call from full-width bottom area)."""
     df_plot = st.session_state.get("data", None)
     labels = st.session_state.get("labels", None)
-    selected_idx = st.session_state.get("selected_image_idx", None)  # Default to None, not 0
+
+    taxonomic_info = st.session_state.get("taxonomic_clustering", {})
+    evaluation_column = taxonomic_info.get("evaluation_column")
+
+    if (
+        evaluation_column
+        and df_plot is not None
+        and evaluation_column in df_plot.columns
+        and labels is not None
+    ):
+        _render_cluster_analysis(df_plot, labels, evaluation_column)
+
+
+def _render_record_details():
+    """Render the record details panel (existing functionality)."""
+    df_plot = st.session_state.get("data", None)
+    labels = st.session_state.get("labels", None)
+    selected_idx = st.session_state.get("selected_image_idx", None)
     filtered_df = st.session_state.get("filtered_df_for_clustering", None)
 
     # Validate that selection matches current data version
@@ -115,7 +138,7 @@ def render_data_preview():
         # Find the full record
         record = filtered_df[filtered_df['uuid'] == selected_uuid].iloc[0]
 
-        st.markdown("### 📋 Record Details")
+        st.markdown("### Record Details")
 
         # Try to display image if identifier/url column exists (cached to prevent re-fetch)
         image_cols = ['identifier', 'image_url', 'url', 'img_url', 'image']
@@ -154,7 +177,7 @@ def render_data_preview():
         # Display remaining metadata as table
         if metadata_rows:
             st.markdown("---")
-            st.markdown("**📊 Metadata**")
+            st.markdown("**Metadata**")
             metadata_df = pd.DataFrame(metadata_rows)
             st.dataframe(
                 metadata_df,
@@ -169,14 +192,14 @@ def render_data_preview():
     else:
         # Show appropriate message based on state
         if df_plot is not None and labels is not None:
-            st.info("📋 Click a point in the scatter plot to view its details.")
+            st.info("Click a point in the scatter plot to view its details.")
         else:
-            st.info("📋 Run clustering first, then click a point to view details.")
+            st.info("Run clustering first, then click a point to view details.")
 
         # Show dataset summary
         filtered_df = st.session_state.get("filtered_df", None)
         if filtered_df is not None and len(filtered_df) > 0:
-            st.markdown("### 📈 Dataset Summary")
+            st.markdown("### Dataset Summary")
             st.markdown(f"**Records:** {len(filtered_df):,}")
 
             # Show column stats
@@ -185,4 +208,75 @@ def render_data_preview():
                 with st.expander("Column overview"):
                     for col, info in list(column_info.items())[:10]:
                         unique = len(info['unique_values']) if info['unique_values'] else "many"
-                        st.caption(f"• **{col}** ({info['type']}): {unique} unique")
+                        st.caption(f"**{col}** ({info['type']}): {unique} unique")
+
+
+def _compute_entropy(counts):
+    """Shannon entropy in bits."""
+    total = sum(counts)
+    if total == 0:
+        return 0.0
+    probs = [c / total for c in counts if c > 0]
+    return -sum(p * np.log2(p) for p in probs)
+
+
+def _build_cluster_tree(df_plot, evaluation_column):
+    """Build a tree-style string summarizing cluster composition against ground truth."""
+    unique_clusters = sorted(df_plot['cluster'].unique(), key=lambda x: int(x))
+    n_total = len(df_plot)
+    n_clusters = len(unique_clusters)
+
+    lines = []
+    lines.append(f'KMeans Clustering Summary ({n_total} points, {n_clusters} clusters)')
+    lines.append(f'Evaluation column: {evaluation_column}')
+    lines.append('')
+
+    for ci, cluster_id in enumerate(unique_clusters):
+        is_last_cluster = (ci == n_clusters - 1)
+        mask = df_plot['cluster'] == cluster_id
+        cluster_df = df_plot[mask]
+        n = len(cluster_df)
+
+        gt_counts = cluster_df[evaluation_column].value_counts()
+        purity = gt_counts.iloc[0] / n if n > 0 else 0
+        dominant = gt_counts.index[0]
+        entropy = _compute_entropy(gt_counts.values)
+
+        prefix = '\u2514\u2500\u2500 ' if is_last_cluster else '\u251c\u2500\u2500 '
+        lines.append(f'{prefix}Cluster {cluster_id}  [{n} pts]  purity: {purity:.0%}  entropy: {entropy:.2f}')
+
+        child_prefix = '    ' if is_last_cluster else '\u2502   '
+        for ji, (cat, count) in enumerate(gt_counts.items()):
+            is_last_cat = (ji == len(gt_counts) - 1)
+            pct = count / n * 100
+            cat_connector = '\u2514\u2500 ' if is_last_cat else '\u251c\u2500 '
+            lines.append(f'{child_prefix}{cat_connector}{cat:<20s} {count:>4d}  {pct:>5.1f}%')
+
+    return '\n'.join(lines)
+
+
+def _render_cluster_analysis(df_plot, labels, evaluation_column):
+    """Render cluster analysis with per-cluster breakdown against ground truth."""
+    eval_metrics = st.session_state.get('evaluation_metrics')
+
+    # Overall metrics
+    if eval_metrics:
+        st.markdown(f"### Evaluation vs `{evaluation_column}`")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("ARI", f"{eval_metrics['ari']:.3f}",
+                      help="Adjusted Rand Index: 1 = perfect, 0 = random, <0 = worse than random")
+        with col2:
+            st.metric("NMI", f"{eval_metrics['nmi']:.3f}",
+                      help="Normalized Mutual Information: 1 = perfect, 0 = no correlation")
+        with col3:
+            st.metric("Evaluated", f"{eval_metrics['n_evaluated']:,}",
+                      help="Rows with non-null ground truth")
+        if eval_metrics.get('n_null_excluded', 0) > 0:
+            st.caption(f"{eval_metrics['n_null_excluded']:,} null rows excluded")
+
+    st.markdown("---")
+
+    # Tree-style cluster summary
+    tree_output = _build_cluster_tree(df_plot, evaluation_column)
+    st.code(tree_output, language="text")

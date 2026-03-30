@@ -33,8 +33,16 @@ def _render_chart_fragment(df_plot):
     # Track previous density mode to detect changes
     prev_density_mode = st.session_state.get("_prev_density_mode", None)
 
+    # Check if color toggle is available (evaluation mode: "Use column values")
+    taxonomic_info = st.session_state.get("taxonomic_clustering", {})
+    evaluation_column = taxonomic_info.get("evaluation_column")
+    show_color_toggle = bool(evaluation_column and evaluation_column in df_plot.columns)
+
     # Plot options in columns for compact layout
-    opt_col1, opt_col2 = st.columns([2, 1])
+    if show_color_toggle:
+        opt_col1, opt_col_color, opt_col2 = st.columns([2, 2, 1])
+    else:
+        opt_col1, opt_col2 = st.columns([2, 1])
 
     with opt_col1:
         density_mode = st.radio(
@@ -45,6 +53,19 @@ def _render_chart_fragment(df_plot):
             key="density_mode",
             help="Off: normal view | Opacity: lower opacity to show overlap | Heatmap: 2D binned density (disables selection)"
         )
+
+    # Color toggle for evaluation mode
+    if show_color_toggle:
+        with opt_col_color:
+            color_by = st.radio(
+                "Color by",
+                options=["KMeans Cluster", evaluation_column],
+                horizontal=True,
+                key="color_by_toggle",
+                help=f"Switch between KMeans cluster assignments and ground truth '{evaluation_column}' values"
+            )
+    else:
+        color_by = None
 
     # Log density mode change
     if prev_density_mode != density_mode:
@@ -104,8 +125,16 @@ def _render_chart_fragment(df_plot):
     else:
         point_opacity = 0.7  # Normal opacity
 
+    # Determine color encoding based on toggle
+    if color_by and color_by != "KMeans Cluster":
+        color_col = color_by
+        color_title = color_by
+    else:
+        color_col = 'cluster'
+        color_title = cluster_legend_title
+
     # Sort legend labels: numeric sort for cluster IDs, alphabetical for strings
-    unique_vals = df_plot['cluster'].unique()
+    unique_vals = df_plot[color_col].unique()
     try:
         sorted_vals = sorted(unique_vals, key=int)
     except (ValueError, TypeError):
@@ -119,8 +148,8 @@ def _render_chart_fragment(df_plot):
             x=alt.X('x:Q', scale=alt.Scale(zero=False)),
             y=alt.Y('y:Q', scale=alt.Scale(zero=False)),
             color=alt.Color(
-                'cluster:N',
-                legend=alt.Legend(title=cluster_legend_title),
+                f'{color_col}:N',
+                legend=alt.Legend(title=color_title),
                 sort=sorted_vals
             ),
             tooltip=tooltip_fields,

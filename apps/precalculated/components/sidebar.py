@@ -18,6 +18,7 @@ from shared.services.clustering_service import ClusteringService
 from shared.components.clustering_controls import render_clustering_backend_controls
 from shared.utils.backend import check_cuda_available, resolve_backend, is_oom_error
 from shared.utils.logging_config import get_logger
+from sklearn.metrics import adjusted_rand_score, normalized_mutual_info_score
 
 logger = get_logger(__name__)
 
@@ -556,14 +557,14 @@ def render_clustering_section() -> Tuple[bool, int, str, str, str, int, Optional
         cluster_method = st.radio(
             "Cluster count method:",
             ["Specify number", "Use column values"],
-            horizontal=True
+            horizontal=True,
+            help="Specify number: manual KMeans | Use column values: KMeans with cluster count from column (for evaluation)"
         )
 
         if cluster_method == "Specify number":
             n_clusters = st.slider("Number of clusters", 2, min(100, len(filtered_df)//2), 5)
             cluster_column = None
         else:
-            # Get categorical columns for clustering
             column_info = st.session_state.get("column_info", {})
             categorical_cols = [k for k, v in column_info.items() if v['type'] == 'categorical']
 
@@ -574,8 +575,23 @@ def render_clustering_section() -> Tuple[bool, int, str, str, str, int, Optional
                     help="Number of clusters = unique values in selected column"
                 )
                 if cluster_column in filtered_df.columns:
-                    n_clusters = filtered_df[cluster_column].nunique()
-                    st.info(f"Using **{n_clusters}** clusters from {cluster_column}")
+                    n_unique = filtered_df[cluster_column].nunique()
+                    null_count = filtered_df[cluster_column].isna().sum()
+
+                    if n_unique > 16:
+                        st.error(
+                            f"**{cluster_column}** has {n_unique} unique values — "
+                            f"exceeds the 16-color limit. Colors will repeat and "
+                            f"make the plot misleading. Filter the data to reduce "
+                            f"cardinality first."
+                        )
+                        n_clusters = n_unique
+                    else:
+                        n_clusters = n_unique
+                        msg = f"KMeans with **{n_clusters}** clusters (from {cluster_column} unique values)"
+                        if null_count > 0:
+                            msg += f" | {null_count} rows with null values"
+                        st.info(msg)
                 else:
                     n_clusters = 5
             else:
@@ -592,13 +608,17 @@ def render_clustering_section() -> Tuple[bool, int, str, str, str, int, Optional
         # Backend controls
         dim_reduction_backend, clustering_backend, n_workers, seed = render_clustering_backend_controls()
 
-        cluster_button = st.button("Run Clustering", type="primary")
+        # Block clustering when cardinality exceeds color limit
+        cardinality_ok = not (cluster_column and cluster_column in filtered_df.columns
+                              and filtered_df[cluster_column].nunique() > 16)
 
-        if cluster_button:
+        cluster_button = st.button("Run Clustering", type="primary", disabled=not cardinality_ok)
+
+        if cluster_button and cardinality_ok:
             run_clustering_with_error_handling(
                 filtered_df, n_clusters, reduction_method,
                 dim_reduction_backend, clustering_backend, n_workers, seed,
-                cluster_column if cluster_method == "Use column values" else None
+                cluster_column=cluster_column if cluster_method == "Use column values" else None
             )
 
         return cluster_button, n_clusters, reduction_method, dim_reduction_backend, clustering_backend, n_workers, seed
@@ -616,6 +636,11 @@ def run_clustering_with_error_handling(
 ):
     """
     Run clustering with comprehensive error handling for VRAM and CUDA issues.
+
+    Supports two modes:
+    - Specify number: KMeans with user-specified n_clusters (cluster_column=None)
+    - Use column values: KMeans with n_clusters from column, preserving KMeans labels
+      for evaluation against the column's ground truth (cluster_column set)
     """
     try:
         # Check CUDA availability
@@ -647,7 +672,7 @@ def run_clustering_with_error_handling(
         logger.info(f"Memory: ~{mem_mb:.1f} MB | Clusters: {n_clusters}")
         logger.info(f"Embeddings extracted ({t_extract:.2f}s)")
 
-        # Run clustering with automatic GPU fallback
+        # Run KMeans + dim reduction
         t_cluster_start = time.time()
         with st.spinner(f"Running {reduction_method} + KMeans..."):
             df_plot, labels = ClusteringService.run_clustering_safe(
@@ -664,37 +689,46 @@ def run_clustering_with_error_handling(
         t_cluster = time.time() - t_cluster_start
         t_total = time.time() - t_start
 
-        # Log clustering completion to console
+        # Log completion
         logger.info(f"{reduction_method} + KMeans completed ({t_cluster:.2f}s)")
         logger.info(f"Total time: {t_total:.2f}s")
 
-        # Create enhanced plot dataframe
+        # Create enhanced plot dataframe (preserves KMeans labels)
         df_plot = create_cluster_dataframe(filtered_df.reset_index(drop=True), df_plot[['x', 'y']].values, labels)
+        df_plot['cluster_name'] = df_plot['cluster'].copy()
 
-        # Handle column-based cluster names
         if cluster_column and cluster_column in filtered_df.columns:
-            filtered_reset = filtered_df.reset_index(drop=True)
-            unique_taxa = sorted(filtered_df[cluster_column].dropna().unique())
-            taxon_to_id = {taxon: str(i) for i, taxon in enumerate(unique_taxa)}
+            # "Use column values" mode: KMeans labels preserved for evaluation
+            st.session_state.taxonomic_clustering = {
+                'is_taxonomic': False,
+                'evaluation_column': cluster_column
+            }
 
-            taxonomic_names = []
-            numeric_clusters = []
-
-            for idx in range(len(df_plot)):
-                taxon_value = filtered_reset.iloc[idx][cluster_column]
-                if pd.notna(taxon_value) and taxon_value in taxon_to_id:
-                    taxonomic_names.append(str(taxon_value))
-                    numeric_clusters.append(taxon_to_id[taxon_value])
-                else:
-                    taxonomic_names.append("Unknown")
-                    numeric_clusters.append(str(len(unique_taxa)))
-
-            df_plot['cluster'] = numeric_clusters
-            df_plot['cluster_name'] = taxonomic_names
-            st.session_state.taxonomic_clustering = {'is_taxonomic': True, 'column': cluster_column}
+            # Compute ARI/NMI: compare KMeans labels vs ground truth column
+            ground_truth = filtered_df.reset_index(drop=True)[cluster_column]
+            non_null_mask = ground_truth.notna()
+            if non_null_mask.sum() > 0:
+                gt_values = ground_truth[non_null_mask].values
+                kmeans_labels_for_eval = labels[non_null_mask.values]
+                ari = adjusted_rand_score(gt_values, kmeans_labels_for_eval)
+                nmi = normalized_mutual_info_score(
+                    gt_values, kmeans_labels_for_eval, average_method='arithmetic'
+                )
+                st.session_state.evaluation_metrics = {
+                    'ari': ari,
+                    'nmi': nmi,
+                    'evaluation_column': cluster_column,
+                    'n_evaluated': int(non_null_mask.sum()),
+                    'n_null_excluded': int((~non_null_mask).sum()),
+                }
+                logger.info(f"Evaluation metrics: ARI={ari:.4f}, NMI={nmi:.4f} "
+                            f"({non_null_mask.sum()} rows evaluated, "
+                            f"{(~non_null_mask).sum()} null rows excluded)")
+            else:
+                st.session_state.evaluation_metrics = None
         else:
-            df_plot['cluster_name'] = df_plot['cluster'].copy()
             st.session_state.taxonomic_clustering = {'is_taxonomic': False}
+            st.session_state.evaluation_metrics = None
 
         # Store results with data version tracking
         data_hash = hashlib.md5(f"{len(df_plot)}_{n_clusters}_{reduction_method}".encode()).hexdigest()[:8]
