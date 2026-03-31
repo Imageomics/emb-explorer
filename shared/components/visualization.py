@@ -121,7 +121,8 @@ def _render_chart_fragment(df_plot):
             color=alt.Color(
                 'cluster:N',
                 legend=alt.Legend(title=cluster_legend_title),
-                sort=sorted_vals
+                sort=sorted_vals,
+                scale=alt.Scale(scheme='tableau20')
             ),
             tooltip=tooltip_fields,
             fillOpacity=alt.condition(point_selector, alt.value(1), alt.value(0.3))
