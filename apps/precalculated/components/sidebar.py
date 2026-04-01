@@ -200,8 +200,8 @@ def render_file_section() -> Tuple[bool, Optional[str]]:
                 st.session_state.parquet_file_path = file_path
                 st.session_state.column_info = column_info
 
-                # Reset downstream state
-                st.session_state.filtered_df = None
+                # Initialize filtered_df to full dataset (filtering is optional)
+                st.session_state.filtered_df = df
                 st.session_state.embeddings = None
                 st.session_state.data = None
                 st.session_state.labels = None
@@ -739,9 +739,9 @@ def create_cluster_dataframe(df: pd.DataFrame, embeddings_2d: np.ndarray, labels
         "idx": range(len(df))
     })
 
-    # Add available metadata columns for tooltips
+    # Add available metadata columns for tooltips (fill NaN for clean Altair display)
     for col in df.columns:
         if col not in ['uuid', 'emb', 'embedding', 'embeddings'] and col not in df_plot.columns:
-            df_plot[col] = df[col].values
+            df_plot[col] = df[col].fillna("N/A").values
 
     return df_plot

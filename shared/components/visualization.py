@@ -82,9 +82,12 @@ def _render_chart_fragment(df_plot):
         tooltip_fields.append('cluster:N')
         cluster_legend_title = "Cluster"
 
-    # Add other metadata columns dynamically (limit to prevent tooltip overflow)
-    skip_cols = {'x', 'y', 'cluster', 'cluster_name', 'idx', 'emb', 'embedding', 'embeddings', 'vector'}
-    metadata_cols = [c for c in df_plot.columns if c not in skip_cols][:8]
+    # Add other metadata columns dynamically
+    # Skip technical, ID, and image-URL columns (details available in Data Preview panel)
+    skip_cols = {'x', 'y', 'cluster', 'cluster_name', 'idx',
+                 'emb', 'embedding', 'embeddings', 'vector',
+                 'uuid', 'identifier', 'image_url', 'url', 'img_url', 'image'}
+    metadata_cols = [c for c in df_plot.columns if c not in skip_cols][:15]
     tooltip_fields.extend(metadata_cols)
 
     # Determine title based on data type
@@ -101,6 +104,13 @@ def _render_chart_fragment(df_plot):
     else:
         point_opacity = 0.7  # Normal opacity
 
+    # Sort legend labels: numeric sort for cluster IDs, alphabetical for strings
+    unique_vals = df_plot['cluster'].unique()
+    try:
+        sorted_vals = sorted(unique_vals, key=int)
+    except (ValueError, TypeError):
+        sorted_vals = sorted(unique_vals, key=str)
+
     # Create scatter plot
     scatter = (
         alt.Chart(df_plot)
@@ -108,7 +118,12 @@ def _render_chart_fragment(df_plot):
         .encode(
             x=alt.X('x:Q', scale=alt.Scale(zero=False)),
             y=alt.Y('y:Q', scale=alt.Scale(zero=False)),
-            color=alt.Color('cluster:N', legend=alt.Legend(title=cluster_legend_title)),
+            color=alt.Color(
+                'cluster:N',
+                legend=alt.Legend(title=cluster_legend_title),
+                sort=sorted_vals,
+                scale=alt.Scale(scheme='tableau20')
+            ),
             tooltip=tooltip_fields,
             fillOpacity=alt.condition(point_selector, alt.value(1), alt.value(0.3))
         )
