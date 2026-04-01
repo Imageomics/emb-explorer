@@ -542,7 +542,7 @@ def render_projection_section():
         # Estimate memory requirements
         emb_dim = len(filtered_df['emb'].iloc[0])
         n_samples = len(filtered_df)
-        est_memory_mb = (n_samples * emb_dim * 4) / (1024 * 1024)
+        est_memory_mb = (n_samples * emb_dim * 4) / (1024 * 1024)  # float32
         if est_memory_mb > 1000:
             st.warning(f"Large dataset: ~{est_memory_mb:.0f} MB for embeddings. Consider filtering further if GPU memory is limited.")
 
@@ -652,8 +652,8 @@ def _run_projection(filtered_df, reduction_method, dim_reduction_backend, seed):
         # Store results
         data_hash = hashlib.md5(f"{len(df_plot)}_{reduction_method}_{t_total}".encode()).hexdigest()[:8]
         st.session_state.data = df_plot
-        st.session_state.data_version = data_hash
-        st.session_state.selected_image_idx = None
+        st.session_state.data_version = data_hash  # Track data version for selection validation
+        st.session_state.selected_image_idx = None  # User must click to select (not auto-select)
         st.session_state.filtered_df_for_clustering = filtered_df.reset_index(drop=True)
 
         logger.info("=" * 60)

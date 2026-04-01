@@ -110,7 +110,7 @@ def render_data_preview():
 
         st.markdown("### Record Details")
 
-        # Try to display image
+        # Try to display image if identifier/url column exists (cached to prevent re-fetch)
         image_cols = ['identifier', 'image_url', 'url', 'img_url', 'image']
         for img_col in image_cols:
             if img_col in record.index and pd.notna(record[img_col]):
@@ -122,7 +122,7 @@ def render_data_preview():
 
         st.markdown(f"**UUID:** `{selected_uuid}`")
 
-        # Build metadata table
+        # Build metadata table for remaining fields
         skip_fields = {'emb', 'embedding', 'embeddings', 'vector', 'idx', 'uuid'}
 
         metadata_rows = []
@@ -156,6 +156,7 @@ def render_data_preview():
             )
 
     else:
+        # Show appropriate message based on state
         if df_plot is not None:
             st.info("Click a point in the scatter plot to view its details.")
         else:

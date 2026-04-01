@@ -83,12 +83,14 @@ def render_taxonomic_tree_summary():
                 help="Maximum depth of the taxonomy tree to display"
             )
 
-        # Create a stable cache key
+        # Create a stable cache key based on the data characteristics and filter parameters
         data_length = len(filtered_df)
+        # Use a stable string representation instead of hash for consistency
         sample_uuids = filtered_df['uuid'].iloc[:min(10, len(filtered_df))].tolist()
         data_id = f"{data_length}_{len(sample_uuids)}_{sample_uuids[0] if sample_uuids else 'empty'}"
         cache_key = f"taxonomy_{data_id}_{group_by}_{selected_cluster}_{min_count}_{tree_depth}"
 
+        # Check if we have cached results and they're still valid
         current_cache_key = st.session_state.get("taxonomy_cache_key")
         cache_exists = cache_key in st.session_state
 
