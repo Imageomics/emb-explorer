@@ -92,6 +92,94 @@ class ClusteringService:
         return df_plot, labels
 
     @staticmethod
+    def run_dim_reduction(
+        embeddings: np.ndarray,
+        reduction_method: str,
+        n_workers: int = 1,
+        dim_reduction_backend: str = "auto",
+        seed: Optional[int] = None
+    ) -> np.ndarray:
+        """Run only dimensionality reduction, returning 2D coordinates."""
+        n_samples, n_features = embeddings.shape
+        logger.info(f"Dim reduction: samples={n_samples}, features={n_features}, "
+                    f"method={reduction_method}, backend={dim_reduction_backend}, seed={seed}")
+
+        t_start = time.time()
+        reduced = reduce_dim(
+            embeddings, reduction_method,
+            seed=seed, n_workers=n_workers, backend=dim_reduction_backend
+        )
+        logger.info(f"Dim reduction complete: {reduced.shape} in {time.time() - t_start:.2f}s")
+        return reduced
+
+    @staticmethod
+    def run_dim_reduction_safe(
+        embeddings: np.ndarray,
+        reduction_method: str,
+        n_workers: int = 1,
+        dim_reduction_backend: str = "auto",
+        seed: Optional[int] = None
+    ) -> np.ndarray:
+        """Dim reduction with automatic GPU-to-CPU fallback."""
+        try:
+            return ClusteringService.run_dim_reduction(
+                embeddings, reduction_method, n_workers, dim_reduction_backend, seed
+            )
+        except (RuntimeError, OSError) as e:
+            if is_oom_error(e):
+                raise
+            if is_cuda_arch_error(e) or is_gpu_error(e):
+                logger.warning(f"GPU error ({e}), falling back to sklearn")
+                return ClusteringService.run_dim_reduction(
+                    embeddings, reduction_method, n_workers, "sklearn", seed
+                )
+            raise
+
+    @staticmethod
+    def run_kmeans_only(
+        embeddings: np.ndarray,
+        n_clusters: int,
+        n_workers: int = 1,
+        clustering_backend: str = "auto",
+        seed: Optional[int] = None
+    ) -> np.ndarray:
+        """Run only KMeans, returning labels array."""
+        n_samples, n_features = embeddings.shape
+        logger.info(f"KMeans: samples={n_samples}, features={n_features}, "
+                    f"k={n_clusters}, backend={clustering_backend}, seed={seed}")
+
+        t_start = time.time()
+        _, labels = run_kmeans(
+            embeddings, int(n_clusters),
+            seed=seed, n_workers=n_workers, backend=clustering_backend
+        )
+        logger.info(f"KMeans complete: {len(np.unique(labels))} clusters in {time.time() - t_start:.2f}s")
+        return labels
+
+    @staticmethod
+    def run_kmeans_only_safe(
+        embeddings: np.ndarray,
+        n_clusters: int,
+        n_workers: int = 1,
+        clustering_backend: str = "auto",
+        seed: Optional[int] = None
+    ) -> np.ndarray:
+        """KMeans with automatic GPU-to-CPU fallback."""
+        try:
+            return ClusteringService.run_kmeans_only(
+                embeddings, n_clusters, n_workers, clustering_backend, seed
+            )
+        except (RuntimeError, OSError) as e:
+            if is_oom_error(e):
+                raise
+            if is_cuda_arch_error(e) or is_gpu_error(e):
+                logger.warning(f"GPU error ({e}), falling back to sklearn")
+                return ClusteringService.run_kmeans_only(
+                    embeddings, n_clusters, n_workers, "sklearn", seed
+                )
+            raise
+
+    @staticmethod
     def generate_clustering_summary(
         embeddings: np.ndarray,
         labels: np.ndarray,

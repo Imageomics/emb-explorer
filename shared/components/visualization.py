@@ -16,14 +16,19 @@ def render_scatter_plot():
     The chart is rendered inside a @st.fragment so that zoom/pan interactions
     only rerun the chart itself — the rest of the page (data preview, summary)
     stays untouched.  A full page rerun is triggered explicitly only when the
-    user clicks a *different* point.
+    user clicks a *different* point or changes the "Color by" column.
     """
     df_plot = st.session_state.get("data", None)
 
     if df_plot is not None and len(df_plot) > 1:
         _render_chart_fragment(df_plot)
     else:
-        st.info("Run clustering to see the cluster scatter plot.")
+        # Detect app type for appropriate message
+        is_precalculated = st.session_state.get("page_type") == "precalculated_app"
+        if is_precalculated:
+            st.info("Run projection to see the scatter plot.")
+        else:
+            st.info("Run clustering to see the cluster scatter plot.")
         st.session_state['selected_image_idx'] = None
 
 
@@ -33,7 +38,10 @@ def _render_chart_fragment(df_plot):
     # Track previous density mode to detect changes
     prev_density_mode = st.session_state.get("_prev_density_mode", None)
 
-    # Plot options in columns for compact layout
+    # Detect app type: precalculated has uuid but no image_path
+    is_precalculated = 'uuid' in df_plot.columns and 'image_path' not in df_plot.columns
+
+    # Plot options
     opt_col1, opt_col2 = st.columns([2, 1])
 
     with opt_col1:
@@ -69,69 +77,134 @@ def _render_chart_fragment(df_plot):
         else:
             heatmap_bins = 40  # Default, not used
 
+    # Determine color column
+    if is_precalculated:
+        # Build list of colorable columns
+        skip_color_cols = {'x', 'y', 'idx', 'uuid', 'emb', 'embedding', 'embeddings', 'vector',
+                           'identifier', 'image_url', 'url', 'img_url', 'image'}
+        colorable_cols = [c for c in df_plot.columns
+                          if c not in skip_color_cols and df_plot[c].nunique() <= 100]
+
+        # Sort KMeans columns to front (all runs, sorted by k)
+        kmeans_cols = sorted(
+            [c for c in colorable_cols if c.startswith("KMeans (k=")],
+            key=lambda c: int(c.split("=")[1].rstrip(")"))
+        )
+        other_cols = [c for c in colorable_cols if not c.startswith("KMeans (k=")]
+        colorable_cols = kmeans_cols + other_cols
+
+        # Build unique count lookup for display
+        col_nunique = {c: df_plot[c].nunique() for c in colorable_cols}
+
+        if colorable_cols:
+            color_col = st.selectbox(
+                "Color by",
+                options=["(none)"] + colorable_cols,
+                index=0,
+                key="color_by_column",
+                format_func=lambda c: c if c == "(none)" else f"{c} ({col_nunique[c]})",
+                help="Select a column to color the points by"
+            )
+            if color_col == "(none)":
+                color_col = None
+        else:
+            color_col = None
+
+        # Warning for high cardinality
+        if color_col and df_plot[color_col].nunique() > 20:
+            st.warning(f"'{color_col}' has {df_plot[color_col].nunique()} unique values. Colors may repeat.")
+
+        # Trigger full page rerun when color changes (so bottom section updates).
+        # Use a sentinel to distinguish "never set" from "set to None".
+        _sentinel = object()
+        prev_color = st.session_state.get("_prev_color_by", _sentinel)
+        if color_col != prev_color:
+            st.session_state["_prev_color_by"] = color_col
+            if prev_color is not _sentinel:
+                st.rerun(scope="app")
+    else:
+        # embed_explore app: always color by cluster
+        color_col = 'cluster' if 'cluster' in df_plot.columns else None
+
     point_selector = alt.selection_point(fields=["idx"], name="point_selection")
 
-    # Determine tooltip fields based on available columns
+    # Build tooltip fields
     tooltip_fields = []
-
-    # Use cluster_name for display if available (taxonomic clustering), otherwise use cluster
-    if 'cluster_name' in df_plot.columns:
-        tooltip_fields.append('cluster_name:N')
-        cluster_legend_title = "Cluster"
-    else:
-        tooltip_fields.append('cluster:N')
-        cluster_legend_title = "Cluster"
-
-    # Add other metadata columns dynamically
-    # Skip technical, ID, and image-URL columns (details available in Data Preview panel)
-    skip_cols = {'x', 'y', 'cluster', 'cluster_name', 'idx',
-                 'emb', 'embedding', 'embeddings', 'vector',
+    skip_cols = {'x', 'y', 'idx', 'emb', 'embedding', 'embeddings', 'vector',
                  'uuid', 'identifier', 'image_url', 'url', 'img_url', 'image'}
+
+    # For embed_explore, include cluster/cluster_name in tooltip
+    if not is_precalculated:
+        if 'cluster_name' in df_plot.columns:
+            tooltip_fields.append('cluster_name:N')
+        elif 'cluster' in df_plot.columns:
+            tooltip_fields.append('cluster:N')
+        skip_cols.update({'cluster', 'cluster_name'})
+
+    # Add the color column first if set (and not already in tooltip)
+    if color_col and color_col not in skip_cols:
+        tooltip_fields.append(f'{color_col}:N')
+        skip_cols.add(color_col)
+
+    # Add remaining metadata columns
     metadata_cols = [c for c in df_plot.columns if c not in skip_cols][:15]
     tooltip_fields.extend(metadata_cols)
 
-    # Determine title based on data type
-    if 'uuid' in df_plot.columns:
-        title = "Embedding Clusters (click a point to view details)"
+    # Title
+    if is_precalculated:
+        title = "Embedding Space (click a point to view details)"
     else:
         title = "Image Clusters (click a point to preview image)"
 
     # Set opacity based on density mode
     if density_mode == "Opacity":
-        point_opacity = 0.15  # Low opacity so overlaps show density
+        point_opacity = 0.15
     elif density_mode == "Heatmap":
-        point_opacity = 0.5  # Medium opacity when heatmap is behind
+        point_opacity = 0.5
     else:
-        point_opacity = 0.7  # Normal opacity
+        point_opacity = 0.7
 
-    # Sort legend labels: numeric sort for cluster IDs, alphabetical for strings
-    unique_vals = df_plot['cluster'].unique()
-    try:
-        sorted_vals = sorted(unique_vals, key=int)
-    except (ValueError, TypeError):
-        sorted_vals = sorted(unique_vals, key=str)
+    # Build chart
+    if color_col:
+        # Sort legend: numeric for KMeans labels, alphabetical for strings
+        unique_vals = df_plot[color_col].unique()
+        try:
+            sorted_vals = sorted(unique_vals, key=int)
+        except (ValueError, TypeError):
+            sorted_vals = sorted(unique_vals, key=str)
 
-    # Create scatter plot
-    scatter = (
-        alt.Chart(df_plot)
-        .mark_circle(size=60, opacity=point_opacity)
-        .encode(
-            x=alt.X('x:Q', scale=alt.Scale(zero=False)),
-            y=alt.Y('y:Q', scale=alt.Scale(zero=False)),
-            color=alt.Color(
-                'cluster:N',
-                legend=alt.Legend(title=cluster_legend_title),
-                sort=sorted_vals,
-                scale=alt.Scale(scheme='tableau20')
-            ),
-            tooltip=tooltip_fields,
-            fillOpacity=alt.condition(point_selector, alt.value(1), alt.value(0.3))
+        scatter = (
+            alt.Chart(df_plot)
+            .mark_circle(size=60, opacity=point_opacity)
+            .encode(
+                x=alt.X('x:Q', scale=alt.Scale(zero=False)),
+                y=alt.Y('y:Q', scale=alt.Scale(zero=False)),
+                color=alt.Color(
+                    f'{color_col}:N',
+                    legend=alt.Legend(title=color_col),
+                    sort=sorted_vals,
+                    scale=alt.Scale(scheme='tableau20')
+                ),
+                tooltip=tooltip_fields,
+                fillOpacity=alt.condition(point_selector, alt.value(1), alt.value(0.3))
+            )
+            .add_params(point_selector)
         )
-        .add_params(point_selector)
-    )
+    else:
+        # No color column: all points same color
+        scatter = (
+            alt.Chart(df_plot)
+            .mark_circle(size=60, opacity=point_opacity)
+            .encode(
+                x=alt.X('x:Q', scale=alt.Scale(zero=False)),
+                y=alt.Y('y:Q', scale=alt.Scale(zero=False)),
+                tooltip=tooltip_fields,
+                fillOpacity=alt.condition(point_selector, alt.value(1), alt.value(0.3))
+            )
+            .add_params(point_selector)
+        )
 
     if density_mode == "Heatmap":
-        # Create 2D density heatmap layer with configurable bins
         density = (
             alt.Chart(df_plot)
             .mark_rect(opacity=0.4)
@@ -145,7 +218,6 @@ def _render_chart_fragment(df_plot):
                 )
             )
         )
-        # Layer density behind scatter
         chart = alt.layer(density, scatter)
     else:
         chart = scatter
@@ -162,23 +234,22 @@ def _render_chart_fragment(df_plot):
             height=700,
             title=title + title_suffix
         )
-        .interactive()  # Enable zoom/pan
+        .interactive()
     )
 
-    # Log chart render only at DEBUG to avoid noise from zoom/pan reruns
     logger.debug(f"[Visualization] Rendering chart: {len(df_plot)} points, density={density_mode}, "
-                 f"bins={heatmap_bins if density_mode == 'Heatmap' else 'N/A'}")
+                 f"color={color_col or 'none'}")
 
-    # Streamlit doesn't support selections on layered charts, so only enable
-    # selection when not using heatmap mode
+    # Include data_version in key so zoom/pan resets when projection changes
+    data_version = st.session_state.get("data_version", "")
+    chart_key = f"alt_chart_{data_version}"
+
     if density_mode == "Heatmap":
-        st.altair_chart(chart, key="alt_chart", width="stretch")
+        st.altair_chart(chart, key=chart_key, width="stretch")
         st.caption("Note: Point selection is disabled when heatmap is shown.")
     else:
-        event = st.altair_chart(chart, key="alt_chart", on_select="rerun", width="stretch")
+        event = st.altair_chart(chart, key=chart_key, on_select="rerun", width="stretch")
 
-        # Handle point selection — only trigger full page rerun when
-        # the selected point actually changes (zoom/pan stay fragment-local)
         if (
             event
             and "selection" in event
@@ -188,9 +259,10 @@ def _render_chart_fragment(df_plot):
             new_idx = int(event["selection"]["point_selection"][0]["idx"])
             prev_idx = st.session_state.get("selected_image_idx")
             if prev_idx != new_idx:
-                cluster = df_plot.iloc[new_idx]['cluster'] if 'cluster' in df_plot.columns else '?'
-                logger.info(f"[Visualization] Point selected: idx={new_idx}, cluster={cluster}")
+                label = ''
+                if color_col and color_col in df_plot.columns:
+                    label = f", {color_col}={df_plot.iloc[new_idx][color_col]}"
+                logger.info(f"[Visualization] Point selected: idx={new_idx}{label}")
                 st.session_state["selected_image_idx"] = new_idx
                 st.session_state["selection_data_version"] = st.session_state.get("data_version", None)
-                # Trigger full page rerun so the preview panel updates
                 st.rerun(scope="app")

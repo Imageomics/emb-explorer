@@ -62,6 +62,7 @@ def configure_logging(
     root_logger.addHandler(console_handler)
 
     # File handler (append mode, rotates implicitly by date via log dir)
+    file_handler = None
     if log_to_file:
         try:
             os.makedirs(_LOG_DIR, exist_ok=True)
@@ -74,6 +75,17 @@ def configure_logging(
         except OSError:
             # Non-fatal: skip file logging if directory can't be created
             pass
+
+    # Prevent duplicate messages from Streamlit's root logger handler.
+    # Our app loggers (shared.*, apps.*) get their own handlers and don't
+    # propagate to root, avoiding double output from Streamlit's handler.
+    for prefix in ("shared", "apps"):
+        pkg_logger = logging.getLogger(prefix)
+        pkg_logger.propagate = False
+        if not pkg_logger.handlers:
+            pkg_logger.addHandler(console_handler)
+            if file_handler:
+                pkg_logger.addHandler(file_handler)
 
     _logging_configured = True
 
