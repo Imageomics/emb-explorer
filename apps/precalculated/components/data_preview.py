@@ -5,6 +5,7 @@ Dynamically displays all available metadata fields.
 
 import streamlit as st
 import pandas as pd
+import numpy as np
 import requests
 import time
 from typing import Optional
@@ -80,10 +81,10 @@ def get_image_from_url(url: str) -> Optional[Image.Image]:
 
 
 def render_data_preview():
-    """Render the data preview panel with dynamic field display."""
+    """Render the data preview panel (record details on point click)."""
     df_plot = st.session_state.get("data", None)
     labels = st.session_state.get("labels", None)
-    selected_idx = st.session_state.get("selected_image_idx", None)  # Default to None, not 0
+    selected_idx = st.session_state.get("selected_image_idx", None)
     filtered_df = st.session_state.get("filtered_df_for_clustering", None)
 
     # Validate that selection matches current data version
@@ -97,25 +98,17 @@ def render_data_preview():
 
     if (
         df_plot is not None and
-        labels is not None and
         selection_valid and
         0 <= selected_idx < len(df_plot) and
         filtered_df is not None
     ):
         # Get the selected record
         selected_uuid = df_plot.iloc[selected_idx]['uuid']
-        cluster = labels[selected_idx] if labels is not None else "?"
-
-        # Use cluster_name if available
-        if 'cluster_name' in df_plot.columns:
-            cluster_display = df_plot.iloc[selected_idx]['cluster_name']
-        else:
-            cluster_display = cluster
 
         # Find the full record
         record = filtered_df[filtered_df['uuid'] == selected_uuid].iloc[0]
 
-        st.markdown("### 📋 Record Details")
+        st.markdown("### Record Details")
 
         # Try to display image if identifier/url column exists (cached to prevent re-fetch)
         image_cols = ['identifier', 'image_url', 'url', 'img_url', 'image']
@@ -127,12 +120,10 @@ def render_data_preview():
                     st.image(image, width=280)
                     break
 
-        # Display Cluster and UUID prominently (not in table)
-        st.markdown(f"**Cluster:** `{cluster_display}`")
         st.markdown(f"**UUID:** `{selected_uuid}`")
 
         # Build metadata table for remaining fields
-        skip_fields = {'emb', 'embedding', 'embeddings', 'vector', 'idx', 'uuid', 'cluster', 'cluster_name'}
+        skip_fields = {'emb', 'embedding', 'embeddings', 'vector', 'idx', 'uuid'}
 
         metadata_rows = []
         for field, value in record.items():
@@ -141,7 +132,6 @@ def render_data_preview():
             if pd.isna(value):
                 continue
 
-            # Format value
             if isinstance(value, float):
                 display_val = f"{value:.4f}"
             elif isinstance(value, (list, tuple)):
@@ -151,10 +141,9 @@ def render_data_preview():
 
             metadata_rows.append({"Field": field, "Value": display_val})
 
-        # Display remaining metadata as table
         if metadata_rows:
             st.markdown("---")
-            st.markdown("**📊 Metadata**")
+            st.markdown("**Metadata**")
             metadata_df = pd.DataFrame(metadata_rows)
             st.dataframe(
                 metadata_df,
@@ -168,21 +157,122 @@ def render_data_preview():
 
     else:
         # Show appropriate message based on state
-        if df_plot is not None and labels is not None:
-            st.info("📋 Click a point in the scatter plot to view its details.")
+        if df_plot is not None:
+            st.info("Click a point in the scatter plot to view its details.")
         else:
-            st.info("📋 Run clustering first, then click a point to view details.")
+            st.info("Run projection first, then click a point to view details.")
 
         # Show dataset summary
-        filtered_df = st.session_state.get("filtered_df", None)
-        if filtered_df is not None and len(filtered_df) > 0:
-            st.markdown("### 📈 Dataset Summary")
-            st.markdown(f"**Records:** {len(filtered_df):,}")
+        filtered_df_summary = st.session_state.get("filtered_df", None)
+        if filtered_df_summary is not None and len(filtered_df_summary) > 0:
+            st.markdown("### Dataset Summary")
+            st.markdown(f"**Records:** {len(filtered_df_summary):,}")
 
-            # Show column stats
             column_info = st.session_state.get("column_info", {})
             if column_info:
                 with st.expander("Column overview"):
                     for col, info in list(column_info.items())[:10]:
                         unique = len(info['unique_values']) if info['unique_values'] else "many"
-                        st.caption(f"• **{col}** ({info['type']}): {unique} unique")
+                        st.caption(f"**{col}** ({info['type']}): {unique} unique")
+
+
+def _compute_entropy(counts):
+    """Shannon entropy in bits."""
+    total = sum(counts)
+    if total == 0:
+        return 0.0
+    probs = [c / total for c in counts if c > 0]
+    return -sum(p * np.log2(p) for p in probs)
+
+
+def _build_cluster_tree(df_plot, kmeans_col, compare_col):
+    """Build a tree-style string summarizing cluster composition against a comparison column."""
+    unique_clusters = sorted(df_plot[kmeans_col].unique(), key=lambda x: int(x))
+    n_total = len(df_plot)
+    n_clusters = len(unique_clusters)
+
+    lines = []
+    lines.append(f'KMeans Clustering Summary ({n_total} points, {n_clusters} clusters)')
+    lines.append(f'Compared against: {compare_col}')
+    lines.append('')
+
+    for ci, cluster_id in enumerate(unique_clusters):
+        is_last_cluster = (ci == n_clusters - 1)
+        mask = df_plot[kmeans_col] == cluster_id
+        cluster_df = df_plot[mask]
+        n = len(cluster_df)
+
+        gt_counts = cluster_df[compare_col].value_counts()
+        purity = gt_counts.iloc[0] / n if n > 0 else 0
+        entropy = _compute_entropy(gt_counts.values)
+
+        prefix = '\u2514\u2500\u2500 ' if is_last_cluster else '\u251c\u2500\u2500 '
+        lines.append(f'{prefix}Cluster {cluster_id}  [{n} pts]  purity: {purity:.0%}  entropy: {entropy:.2f}')
+
+        child_prefix = '    ' if is_last_cluster else '\u2502   '
+        for ji, (cat, count) in enumerate(gt_counts.items()):
+            is_last_cat = (ji == len(gt_counts) - 1)
+            pct = count / n * 100
+            cat_connector = '\u2514\u2500 ' if is_last_cat else '\u251c\u2500 '
+            lines.append(f'{child_prefix}{cat_connector}{str(cat):<20} {count:>4d}  {pct:>5.1f}%')
+
+    return '\n'.join(lines)
+
+
+def render_cluster_analysis():
+    """Render cluster analysis section (full-width bottom area).
+
+    Shows ARI/NMI and tree breakdown when KMeans labels exist and a
+    metadata column is selected in the Color by dropdown.
+    """
+    df_plot = st.session_state.get("data", None)
+    labels = st.session_state.get("labels", None)
+    kmeans_col = st.session_state.get("kmeans_column", None)
+    color_by = st.session_state.get("color_by_column", None)
+
+    if df_plot is None or labels is None or kmeans_col is None:
+        return
+    if kmeans_col not in df_plot.columns:
+        return
+
+    # Only show analysis when comparing KMeans against a different metadata column
+    if not color_by or color_by == "(none)" or color_by == kmeans_col:
+        return
+    if color_by not in df_plot.columns:
+        return
+
+    from sklearn.metrics import adjusted_rand_score, normalized_mutual_info_score
+
+    st.markdown(f"### Cluster Analysis: {kmeans_col} vs {color_by}")
+
+    # Compute ARI/NMI (exclude "N/A" rows from metric computation)
+    kmeans_labels = df_plot[kmeans_col].values
+    metadata_labels = df_plot[color_by].values
+    valid_mask = metadata_labels != "N/A"
+    n_valid = valid_mask.sum()
+    n_excluded = len(metadata_labels) - n_valid
+
+    if n_valid > 0:
+        ari = adjusted_rand_score(metadata_labels[valid_mask], kmeans_labels[valid_mask])
+        nmi = normalized_mutual_info_score(
+            metadata_labels[valid_mask], kmeans_labels[valid_mask], average_method='arithmetic'
+        )
+
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("ARI", f"{ari:.3f}",
+                      help="Adjusted Rand Index: 1 = perfect, 0 = random, <0 = worse than random")
+        with col2:
+            st.metric("NMI", f"{nmi:.3f}",
+                      help="Normalized Mutual Information: 1 = perfect, 0 = no correlation")
+        with col3:
+            st.metric("Evaluated", f"{n_valid:,}",
+                      help=f"Rows with non-null '{color_by}'")
+        if n_excluded > 0:
+            st.caption(f"{n_excluded:,} rows with N/A '{color_by}' excluded from evaluation")
+
+        # Tree-style breakdown
+        tree_output = _build_cluster_tree(df_plot, kmeans_col, color_by)
+        st.code(tree_output, language="text")
+    else:
+        st.info(f"No valid '{color_by}' values to compare with KMeans clusters.")

@@ -17,36 +17,50 @@ def render_taxonomic_tree_summary():
     labels = st.session_state.get("labels", None)
     filtered_df = st.session_state.get("filtered_df_for_clustering", None)
 
-    if df_plot is not None and labels is not None and filtered_df is not None:
+    if df_plot is not None and filtered_df is not None:
         st.markdown("### Taxonomic Distribution")
 
+        # Detect available KMeans columns
+        kmeans_cols = sorted(
+            [c for c in df_plot.columns if c.startswith("KMeans (k=")],
+            key=lambda c: int(c.split("=")[1].rstrip(")"))
+        )
+        # Fallback for embed_explore app (has 'cluster' column directly)
+        has_embed_explore_cluster = 'cluster' in df_plot.columns and not kmeans_cols
+
         # Add controls at the top of the taxonomy section
-        col1, col2, col3 = st.columns([2, 1, 1])
+        col1, col2, col3, col4 = st.columns([1.5, 1.5, 1, 1])
 
         with col1:
-            # Get available clusters
-            cluster_options = ["All"]
-            if "cluster" in df_plot.columns:
-                # Check if we have taxonomic clustering with cluster names
-                taxonomic_info = st.session_state.get("taxonomic_clustering", {})
-                is_taxonomic = taxonomic_info.get('is_taxonomic', False)
+            if kmeans_cols:
+                # Precalculated app: let user pick which KMeans run
+                group_by = st.selectbox(
+                    "Group by",
+                    options=["(none)"] + kmeans_cols,
+                    index=0,
+                    key="taxonomy_group_by",
+                    help="Select a KMeans result to filter taxonomy by cluster"
+                )
+                if group_by == "(none)":
+                    group_by = None
+            elif has_embed_explore_cluster:
+                group_by = "cluster"
+            else:
+                group_by = None
 
-                if is_taxonomic and 'cluster_name' in df_plot.columns:
-                    # Use taxonomic names for display
-                    unique_cluster_names = sorted(df_plot["cluster_name"].unique())
-                    cluster_options.extend(unique_cluster_names)
-                else:
-                    # Standard numeric clustering
-                    unique_clusters = sorted(df_plot["cluster"].unique(), key=lambda x: int(x))
-                    cluster_options.extend([f"Cluster {c}" for c in unique_clusters])
-
-            selected_cluster = st.selectbox(
-                "Display taxonomy for:",
-                options=cluster_options,
-                index=0,
-                key="taxonomy_cluster_selector",
-                help="Select a specific cluster to show its taxonomy tree, or 'All' to show the entire dataset"
-            )
+        with col2:
+            if group_by and group_by in df_plot.columns:
+                unique_clusters = sorted(df_plot[group_by].unique(), key=lambda x: int(x))
+                cluster_options = ["All"] + [str(c) for c in unique_clusters]
+                selected_cluster = st.selectbox(
+                    "Cluster",
+                    options=cluster_options,
+                    index=0,
+                    key="taxonomy_cluster_selector",
+                    help="Select a specific cluster or 'All'"
+                )
+            else:
+                selected_cluster = "All"
 
         with col2:
             min_count = st.number_input(
@@ -70,49 +84,28 @@ def render_taxonomic_tree_summary():
             )
 
         # Create a stable cache key based on the data characteristics and filter parameters
-        # Use data length and a sample of UUIDs for a stable data identifier
         data_length = len(filtered_df)
         # Use a stable string representation instead of hash for consistency
         sample_uuids = filtered_df['uuid'].iloc[:min(10, len(filtered_df))].tolist()
         data_id = f"{data_length}_{len(sample_uuids)}_{sample_uuids[0] if sample_uuids else 'empty'}"
-        cache_key = f"taxonomy_{data_id}_{selected_cluster}_{min_count}_{tree_depth}"
+        cache_key = f"taxonomy_{data_id}_{group_by}_{selected_cluster}_{min_count}_{tree_depth}"
 
         # Check if we have cached results and they're still valid
-        # Also ensure critical session state data hasn't changed unexpectedly
         current_cache_key = st.session_state.get("taxonomy_cache_key")
         cache_exists = cache_key in st.session_state
 
         if (not cache_exists or current_cache_key != cache_key):
 
-            # Data or parameters changed, regenerate taxonomy tree
             with st.spinner("Building taxonomy tree..."):
-                # Filter data based on selected cluster
-                if selected_cluster != "All":
-                    taxonomic_info = st.session_state.get("taxonomic_clustering", {})
-                    is_taxonomic = taxonomic_info.get('is_taxonomic', False)
-
-                    if is_taxonomic and 'cluster_name' in df_plot.columns:
-                        # For taxonomic clustering, filter by cluster_name
-                        cluster_mask = df_plot['cluster_name'] == selected_cluster
-                        cluster_uuids = df_plot[cluster_mask]['uuid'].tolist()
-                        tree_df = filtered_df[filtered_df['uuid'].isin(cluster_uuids)]
-                        display_title = f"Taxonomic Tree for {selected_cluster}"
-                    elif selected_cluster.startswith("Cluster "):
-                        # For numeric clustering, extract cluster ID
-                        cluster_id = selected_cluster.replace("Cluster ", "")
-                        cluster_mask = df_plot['cluster'] == cluster_id
-                        cluster_uuids = df_plot[cluster_mask]['uuid'].tolist()
-                        tree_df = filtered_df[filtered_df['uuid'].isin(cluster_uuids)]
-                        display_title = f"Taxonomic Tree for {selected_cluster}"
-                    else:
-                        # Fallback: treat as direct cluster name
-                        cluster_mask = df_plot['cluster_name'] == selected_cluster if 'cluster_name' in df_plot.columns else df_plot['cluster'] == selected_cluster
-                        cluster_uuids = df_plot[cluster_mask]['uuid'].tolist()
-                        tree_df = filtered_df[filtered_df['uuid'].isin(cluster_uuids)]
-                        display_title = f"Taxonomic Tree for {selected_cluster}"
+                # Filter data based on group_by + selected_cluster
+                if group_by and selected_cluster != "All" and group_by in df_plot.columns:
+                    cluster_mask = df_plot[group_by] == selected_cluster
+                    cluster_uuids = df_plot[cluster_mask]['uuid'].tolist()
+                    tree_df = filtered_df[filtered_df['uuid'].isin(cluster_uuids)]
+                    display_title = f"Taxonomic Tree for {group_by} = {selected_cluster}"
                 else:
                     tree_df = filtered_df
-                    display_title = "Taxonomic Tree for All Clusters"
+                    display_title = "Taxonomic Tree for All Data"
 
                 # Build taxonomic tree for the selected data (only when needed)
                 tree = build_taxonomic_tree(tree_df)
@@ -159,40 +152,39 @@ def render_clustering_summary(show_taxonomy=False):
     summary_df = st.session_state.get("clustering_summary", None)
     representatives = st.session_state.get("clustering_representatives", None)
 
-    if df_plot is not None and labels is not None:
-        # Check if this is image data or metadata-only data
+    if df_plot is not None:
         has_images = 'image_path' in df_plot.columns
 
         if has_images:
-            # For image data, show the full clustering summary
-            st.subheader("Clustering Summary")
+            # embed_explore app: show full clustering summary with representative images
+            if labels is not None:
+                st.subheader("Clustering Summary")
 
-            if summary_df is not None and representatives is not None:
-                logger.debug("Displaying cached clustering summary")
-                st.dataframe(summary_df, hide_index=True, width='stretch')
+                if summary_df is not None and representatives is not None:
+                    logger.debug("Displaying cached clustering summary")
+                    st.dataframe(summary_df, hide_index=True, width='stretch')
 
-                st.markdown("#### Representative Images")
-                for row in summary_df.itertuples():
-                    k = row.Cluster
-                    st.markdown(f"**Cluster {k}**")
-                    img_cols = st.columns(3)
-                    for i, img_idx in enumerate(representatives[k]):
-                        img_path = df_plot.iloc[img_idx]["image_path"]
-                        logger.debug(f"Displaying representative image: {img_path}")
-                        img_cols[i].image(
-                            img_path,
-                            width='stretch',
-                            caption=os.path.basename(img_path)
-                        )
-            else:
-                st.info("Clustering summary will be computed when you run clustering.")
+                    st.markdown("#### Representative Images")
+                    for row in summary_df.itertuples():
+                        k = row.Cluster
+                        st.markdown(f"**Cluster {k}**")
+                        img_cols = st.columns(3)
+                        for i, img_idx in enumerate(representatives[k]):
+                            img_path = df_plot.iloc[img_idx]["image_path"]
+                            logger.debug(f"Displaying representative image: {img_path}")
+                            img_cols[i].image(
+                                img_path,
+                                width='stretch',
+                                caption=os.path.basename(img_path)
+                            )
+                else:
+                    st.info("Clustering summary will be computed when you run clustering.")
         else:
-            # For metadata-only data (precalculated embeddings), show taxonomic tree if requested
+            # Precalculated app: show taxonomy tree (works with or without KMeans)
             if show_taxonomy:
                 filtered_df = st.session_state.get("filtered_df_for_clustering", None)
-
                 if filtered_df is not None:
                     render_taxonomic_tree_summary()
 
     else:
-        st.info("Clustering summary will appear here after clustering.")
+        st.info("Summary will appear here after projection.")

@@ -80,6 +80,73 @@ def render_clustering_backend_controls():
     return dim_reduction_backend, clustering_backend, n_workers, seed
 
 
+def render_projection_controls():
+    """
+    Render backend controls for dimensionality reduction only.
+
+    Returns:
+        Tuple of (dim_reduction_backend, seed)
+    """
+    dim_reduction_options = ["auto", "sklearn"]
+    if HAS_CUML_PACKAGE and HAS_CUPY_PACKAGE:
+        dim_reduction_options.append("cuml")
+
+    use_seed = st.checkbox("Use fixed seed", value=False, help="Enable for reproducible results",
+                           key="proj_use_seed")
+    if use_seed:
+        seed = st.number_input("Random seed", min_value=0, max_value=999999, value=614, step=1,
+                               key="proj_seed")
+    else:
+        seed = None
+
+    with st.expander("Backend:", expanded=False):
+        dim_reduction_backend = st.selectbox(
+            "Dim Reduction Backend",
+            options=dim_reduction_options, index=0,
+            help="Backend for PCA/t-SNE/UMAP computation",
+            key="proj_backend"
+        )
+
+    return dim_reduction_backend, seed
+
+
+def render_kmeans_controls():
+    """
+    Render backend controls for KMeans only.
+
+    Returns:
+        Tuple of (clustering_backend, n_workers, seed)
+    """
+    clustering_options = ["auto", "sklearn"]
+    if HAS_FAISS_PACKAGE:
+        clustering_options.append("faiss")
+    if HAS_CUML_PACKAGE and HAS_CUPY_PACKAGE:
+        clustering_options.append("cuml")
+
+    use_seed = st.checkbox("Use fixed seed", value=False, help="Enable for reproducible results",
+                           key="km_use_seed")
+    if use_seed:
+        seed = st.number_input("Random seed", min_value=0, max_value=999999, value=614, step=1,
+                               key="km_seed")
+    else:
+        seed = None
+
+    with st.expander("Backend:", expanded=False):
+        clustering_backend = st.selectbox(
+            "Clustering Backend",
+            options=clustering_options, index=0,
+            help="Backend for K-means computation",
+            key="km_backend"
+        )
+        n_workers = st.number_input(
+            "N workers", min_value=1, max_value=64, value=8, step=1,
+            help="Parallel workers for CPU backends",
+            key="km_workers"
+        )
+
+    return clustering_backend, n_workers, seed
+
+
 def render_basic_clustering_controls():
     """
     Render basic clustering parameter controls.

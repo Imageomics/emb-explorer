@@ -15,7 +15,7 @@ import hashlib
 from typing import Dict, Any, Optional, Tuple, List
 
 from shared.services.clustering_service import ClusteringService
-from shared.components.clustering_controls import render_clustering_backend_controls
+from shared.components.clustering_controls import render_projection_controls, render_kmeans_controls
 from shared.utils.backend import check_cuda_available, resolve_backend, is_oom_error
 from shared.utils.logging_config import get_logger
 
@@ -425,6 +425,7 @@ def render_dynamic_filters() -> Dict[str, Any]:
                     st.session_state.embeddings = None
                     st.session_state.data = None
                     st.session_state.labels = None
+                    st.session_state.kmeans_column = None
                     st.session_state.selected_image_idx = None
 
                     st.success(f"Filtered to {len(filtered_df):,} records")
@@ -527,43 +528,60 @@ def extract_embeddings_safe(df: pd.DataFrame) -> np.ndarray:
     return embeddings
 
 
-def render_clustering_section() -> Tuple[bool, int, str, str, str, int, Optional[int]]:
-    """
-    Render the clustering section with VRAM error handling.
-
-    Returns:
-        Tuple of (cluster_button_clicked, n_clusters, reduction_method,
-                  dim_reduction_backend, clustering_backend, n_workers, seed)
-    """
-    with st.expander("🎯 Cluster Embeddings", expanded=False):
+def render_projection_section():
+    """Render the 2D projection section."""
+    with st.expander("Project to 2D", expanded=False):
         filtered_df = st.session_state.get("filtered_df", None)
 
         if filtered_df is None or len(filtered_df) == 0:
-            st.info("Apply filters first to enable clustering.")
-            return False, 5, "TSNE", "auto", "auto", 8, None
+            st.info("Load a parquet file to enable projection.")
+            return
 
-        st.markdown(f"**Ready to cluster:** {len(filtered_df):,} records")
+        st.markdown(f"**Ready to project:** {len(filtered_df):,} records")
 
         # Estimate memory requirements
         emb_dim = len(filtered_df['emb'].iloc[0])
         n_samples = len(filtered_df)
         est_memory_mb = (n_samples * emb_dim * 4) / (1024 * 1024)  # float32
-
         if est_memory_mb > 1000:
-            st.warning(f"⚠️ Large dataset: ~{est_memory_mb:.0f} MB for embeddings. Consider filtering further if GPU memory is limited.")
+            st.warning(f"Large dataset: ~{est_memory_mb:.0f} MB for embeddings. Consider filtering further if GPU memory is limited.")
+
+        reduction_method = st.selectbox(
+            "Dimensionality Reduction",
+            ["TSNE", "PCA", "UMAP"],
+            help="Method to project high-dimensional embeddings to 2D for visualization."
+        )
+
+        dim_reduction_backend, seed = render_projection_controls()
+
+        if st.button("Project to 2D", type="primary"):
+            _run_projection(filtered_df, reduction_method, dim_reduction_backend, seed)
+
+
+def render_kmeans_section():
+    """Render the optional KMeans clustering section."""
+    with st.expander("KMeans Clustering", expanded=False):
+        df_plot = st.session_state.get("data", None)
+        embeddings = st.session_state.get("embeddings", None)
+
+        if df_plot is None or embeddings is None:
+            st.info("Run projection first to enable KMeans.")
+            return
+
+        filtered_df = st.session_state.get("filtered_df", None)
+        emb_dim = embeddings.shape[1]
+        st.markdown(f"**{len(df_plot):,} points** ({emb_dim}-dim embeddings)")
 
         # Cluster count options
         cluster_method = st.radio(
-            "Cluster count method:",
-            ["Specify number", "Use column values"],
+            "Cluster count:",
+            ["Specify number", "From column"],
             horizontal=True
         )
 
         if cluster_method == "Specify number":
-            n_clusters = st.slider("Number of clusters", 2, min(100, len(filtered_df)//2), 5)
-            cluster_column = None
+            n_clusters = st.slider("Number of clusters", 2, min(100, len(df_plot) // 2), 5)
         else:
-            # Get categorical columns for clustering
             column_info = st.session_state.get("column_info", {})
             categorical_cols = [k for k, v in column_info.items() if v['type'] == 'categorical']
 
@@ -573,168 +591,134 @@ def render_clustering_section() -> Tuple[bool, int, str, str, str, int, Optional
                     categorical_cols,
                     help="Number of clusters = unique values in selected column"
                 )
-                if cluster_column in filtered_df.columns:
+                if filtered_df is not None and cluster_column in filtered_df.columns:
                     n_clusters = filtered_df[cluster_column].nunique()
+                    if n_clusters > 20:
+                        st.warning(
+                            f"**{cluster_column}** has {n_clusters} unique values. "
+                            f"Colors may repeat beyond 20. Consider filtering first."
+                        )
                     st.info(f"Using **{n_clusters}** clusters from {cluster_column}")
                 else:
                     n_clusters = 5
             else:
                 st.warning("No categorical columns available")
                 n_clusters = 5
-                cluster_column = None
 
-        reduction_method = st.selectbox(
-            "Dimensionality Reduction",
-            ["TSNE", "PCA", "UMAP"],
-            help="For 2D visualization only. Clustering uses full embeddings."
-        )
+        clustering_backend, n_workers, seed = render_kmeans_controls()
 
-        # Backend controls
-        dim_reduction_backend, clustering_backend, n_workers, seed = render_clustering_backend_controls()
-
-        cluster_button = st.button("Run Clustering", type="primary")
-
-        if cluster_button:
-            run_clustering_with_error_handling(
-                filtered_df, n_clusters, reduction_method,
-                dim_reduction_backend, clustering_backend, n_workers, seed,
-                cluster_column if cluster_method == "Use column values" else None
-            )
-
-        return cluster_button, n_clusters, reduction_method, dim_reduction_backend, clustering_backend, n_workers, seed
+        if st.button("Run KMeans", type="primary"):
+            _run_kmeans(embeddings, n_clusters, clustering_backend, n_workers, seed)
 
 
-def run_clustering_with_error_handling(
-    filtered_df: pd.DataFrame,
-    n_clusters: int,
-    reduction_method: str,
-    dim_reduction_backend: str,
-    clustering_backend: str,
-    n_workers: int,
-    seed: Optional[int],
-    cluster_column: Optional[str] = None
-):
-    """
-    Run clustering with comprehensive error handling for VRAM and CUDA issues.
-    """
+def _run_projection(filtered_df, reduction_method, dim_reduction_backend, seed):
+    """Run dim reduction and create the 2D scatter plot dataframe."""
     try:
-        # Check CUDA availability
         cuda_available, device_info = check_cuda_available()
+        actual_backend = resolve_backend(dim_reduction_backend, "reduction")
 
-        # Resolve auto backends
-        actual_dim_backend = resolve_backend(dim_reduction_backend, "reduction")
-        actual_cluster_backend = resolve_backend(clustering_backend, "clustering")
-
-        # Log clustering start
         logger.info("=" * 60)
-        logger.info("CLUSTERING START")
-        logger.info("=" * 60)
+        logger.info("PROJECTION START")
         logger.info(f"Device: {device_info} (CUDA: {'Yes' if cuda_available else 'No'})")
-        logger.info(f"Dim Reduction Backend: {actual_dim_backend} (requested: {dim_reduction_backend})")
-        logger.info(f"Clustering Backend: {actual_cluster_backend} (requested: {clustering_backend})")
+        logger.info(f"Backend: {actual_backend} (requested: {dim_reduction_backend})")
 
-        # Extract embeddings
         t_start = time.time()
         with st.spinner("Extracting embeddings..."):
             embeddings = extract_embeddings_safe(filtered_df)
             st.session_state.embeddings = embeddings
-        t_extract = time.time() - t_start
 
         n_samples, emb_dim = embeddings.shape
-        mem_mb = (n_samples * emb_dim * 4) / (1024 * 1024)
+        logger.info(f"Records: {n_samples:,} | Dim: {emb_dim} | Extracted in {time.time() - t_start:.2f}s")
 
-        logger.info(f"Records: {n_samples:,} | Embedding dim: {emb_dim}")
-        logger.info(f"Memory: ~{mem_mb:.1f} MB | Clusters: {n_clusters}")
-        logger.info(f"Embeddings extracted ({t_extract:.2f}s)")
-
-        # Run clustering with automatic GPU fallback
-        t_cluster_start = time.time()
-        with st.spinner(f"Running {reduction_method} + KMeans..."):
-            df_plot, labels = ClusteringService.run_clustering_safe(
-                embeddings,
-                filtered_df['uuid'].tolist(),
-                n_clusters,
-                reduction_method,
-                n_workers,
-                actual_dim_backend,
-                actual_cluster_backend,
-                seed
+        with st.spinner(f"Running {reduction_method}..."):
+            reduced = ClusteringService.run_dim_reduction_safe(
+                embeddings, reduction_method,
+                n_workers=8, dim_reduction_backend=actual_backend, seed=seed
             )
 
-        t_cluster = time.time() - t_cluster_start
         t_total = time.time() - t_start
+        logger.info(f"Projection complete in {t_total:.2f}s")
 
-        # Log clustering completion to console
-        logger.info(f"{reduction_method} + KMeans completed ({t_cluster:.2f}s)")
-        logger.info(f"Total time: {t_total:.2f}s")
+        # Create plot dataframe (no cluster column)
+        df_plot = _create_projection_dataframe(filtered_df.reset_index(drop=True), reduced)
 
-        # Create enhanced plot dataframe
-        df_plot = create_cluster_dataframe(filtered_df.reset_index(drop=True), df_plot[['x', 'y']].values, labels)
+        # Carry over any existing KMeans columns from previous df_plot
+        prev_df = st.session_state.get("data")
+        if prev_df is not None and len(prev_df) == len(df_plot):
+            for col in prev_df.columns:
+                if col.startswith("KMeans (k="):
+                    df_plot[col] = prev_df[col].values
 
-        # Handle column-based cluster names
-        if cluster_column and cluster_column in filtered_df.columns:
-            filtered_reset = filtered_df.reset_index(drop=True)
-            unique_taxa = sorted(filtered_df[cluster_column].dropna().unique())
-            taxon_to_id = {taxon: str(i) for i, taxon in enumerate(unique_taxa)}
-
-            taxonomic_names = []
-            numeric_clusters = []
-
-            for idx in range(len(df_plot)):
-                taxon_value = filtered_reset.iloc[idx][cluster_column]
-                if pd.notna(taxon_value) and taxon_value in taxon_to_id:
-                    taxonomic_names.append(str(taxon_value))
-                    numeric_clusters.append(taxon_to_id[taxon_value])
-                else:
-                    taxonomic_names.append("Unknown")
-                    numeric_clusters.append(str(len(unique_taxa)))
-
-            df_plot['cluster'] = numeric_clusters
-            df_plot['cluster_name'] = taxonomic_names
-            st.session_state.taxonomic_clustering = {'is_taxonomic': True, 'column': cluster_column}
-        else:
-            df_plot['cluster_name'] = df_plot['cluster'].copy()
-            st.session_state.taxonomic_clustering = {'is_taxonomic': False}
-
-        # Store results with data version tracking
-        data_hash = hashlib.md5(f"{len(df_plot)}_{n_clusters}_{reduction_method}".encode()).hexdigest()[:8]
-
+        # Store results
+        data_hash = hashlib.md5(f"{len(df_plot)}_{reduction_method}_{t_total}".encode()).hexdigest()[:8]
         st.session_state.data = df_plot
-        st.session_state.labels = labels
         st.session_state.data_version = data_hash  # Track data version for selection validation
         st.session_state.selected_image_idx = None  # User must click to select (not auto-select)
         st.session_state.filtered_df_for_clustering = filtered_df.reset_index(drop=True)
 
-        # Final log with success
-        logger.info(f"Clustering complete: {n_clusters} clusters found")
         logger.info("=" * 60)
-
-        st.success(f"Clustering complete! {n_clusters} clusters found.")
+        st.success(f"Projected {n_samples:,} points to 2D using {reduction_method}.")
 
     except (RuntimeError, OSError) as e:
         if is_oom_error(e):
             st.error("**GPU Out of Memory**")
             st.info("Try: Reduce dataset size with more filters, use 'sklearn' backend, or use PCA")
-            logger.exception("GPU OOM error during clustering")
+            logger.exception("GPU OOM during projection")
         else:
-            st.error(f"Error during clustering: {e}")
-            logger.exception("Clustering error")
-
+            st.error(f"Error during projection: {e}")
+            logger.exception("Projection error")
     except MemoryError:
         st.error("**System Out of Memory** - Reduce dataset size")
-        logger.exception("System memory exhausted during clustering")
-
+        logger.exception("System memory exhausted during projection")
     except Exception as e:
         st.error(f"Error: {e}")
-        logger.exception("Unexpected clustering error")
+        logger.exception("Unexpected projection error")
 
 
-def create_cluster_dataframe(df: pd.DataFrame, embeddings_2d: np.ndarray, labels: np.ndarray) -> pd.DataFrame:
-    """Create a dataframe for clustering visualization."""
+def _run_kmeans(embeddings, n_clusters, clustering_backend, n_workers, seed):
+    """Run KMeans on already-extracted embeddings and add labels to df_plot."""
+    try:
+        actual_backend = resolve_backend(clustering_backend, "clustering")
+        logger.info(f"KMeans: k={n_clusters}, backend={actual_backend}")
+
+        with st.spinner(f"Running KMeans (k={n_clusters})..."):
+            labels = ClusteringService.run_kmeans_only_safe(
+                embeddings, n_clusters,
+                n_workers=n_workers, clustering_backend=actual_backend, seed=seed
+            )
+
+        # Add KMeans column to existing df_plot (keep previous runs)
+        df_plot = st.session_state.data
+        kmeans_col = f"KMeans (k={n_clusters})"
+
+        df_plot[kmeans_col] = labels.astype(str)
+        st.session_state.data = df_plot
+        st.session_state.labels = labels
+        st.session_state.kmeans_column = kmeans_col
+
+        logger.info(f"KMeans complete: {len(np.unique(labels))} clusters")
+        st.success(f"KMeans complete! {len(np.unique(labels))} clusters assigned.")
+
+    except (RuntimeError, OSError) as e:
+        if is_oom_error(e):
+            st.error("**GPU Out of Memory**")
+            logger.exception("GPU OOM during KMeans")
+        else:
+            st.error(f"Error during KMeans: {e}")
+            logger.exception("KMeans error")
+    except MemoryError:
+        st.error("**System Out of Memory** - Reduce dataset size")
+        logger.exception("System memory exhausted during KMeans")
+    except Exception as e:
+        st.error(f"Error: {e}")
+        logger.exception("Unexpected KMeans error")
+
+
+def _create_projection_dataframe(df: pd.DataFrame, embeddings_2d: np.ndarray) -> pd.DataFrame:
+    """Create a dataframe for 2D projection visualization (no cluster column)."""
     df_plot = pd.DataFrame({
         "x": embeddings_2d[:, 0],
         "y": embeddings_2d[:, 1],
-        "cluster": labels.astype(str),
         "uuid": df['uuid'].values,
         "idx": range(len(df))
     })

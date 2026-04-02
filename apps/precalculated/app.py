@@ -10,7 +10,8 @@ import streamlit as st
 from apps.precalculated.components.sidebar import (
     render_file_section,
     render_dynamic_filters,
-    render_clustering_section,
+    render_projection_section,
+    render_kmeans_section,
 )
 from apps.precalculated.components.data_preview import render_data_preview
 from shared.components.visualization import render_scatter_plot
@@ -38,7 +39,7 @@ def app():
     # Initialize session state
     if "page_type" not in st.session_state or st.session_state.page_type != "precalculated_app":
         # Clear any stale state from other apps
-        keys_to_clear = ["embeddings", "valid_paths", "last_image_dir", "embedding_complete"]
+        keys_to_clear = ["embeddings", "valid_paths", "last_image_dir", "embedding_complete", "kmeans_column"]
         for key in keys_to_clear:
             if key in st.session_state:
                 del st.session_state[key]
@@ -61,7 +62,8 @@ def app():
     col_settings, col_plot, col_preview = st.columns([2, 7, 3])
 
     with col_settings:
-        render_clustering_section()
+        render_projection_section()
+        render_kmeans_section()
 
     with col_plot:
         render_scatter_plot()
@@ -69,7 +71,7 @@ def app():
     with col_preview:
         render_data_preview()
 
-    # Bottom: Clustering summary
+    # Bottom: Taxonomy summary
     st.markdown("---")
     render_clustering_summary(show_taxonomy=True)
 
