@@ -19,24 +19,31 @@ def render_image_preview():
 
     valid_paths = st.session_state.get("valid_paths", None)
     labels = st.session_state.get("labels", None)
-    selected_idx = st.session_state.get("selected_image_idx", 0)
+    kmeans_col = st.session_state.get("kmeans_column", None)
+    selected_idx = st.session_state.get("selected_image_idx", None)
 
     if (
         valid_paths is not None and
-        labels is not None and
         selected_idx is not None and
         0 <= selected_idx < len(valid_paths)
     ):
         img_path = valid_paths[selected_idx]
-        cluster = labels[selected_idx] if labels is not None else "?"
+        cluster = labels[selected_idx] if labels is not None else None
 
-        # Log only when image changes
         if _last_displayed_path != img_path:
-            logger.info(f"[Image] Loading local file: {os.path.basename(img_path)} (cluster={cluster})")
+            log_msg = f"[Image] Loading local file: {os.path.basename(img_path)}"
+            if cluster is not None:
+                log_msg += f" (cluster={cluster})"
+            logger.info(log_msg)
             _last_displayed_path = img_path
 
-        st.image(img_path, caption=f"Cluster {cluster}: {os.path.basename(img_path)}", width='stretch')
+        caption = os.path.basename(img_path)
+        if cluster is not None and kmeans_col:
+            caption = f"{kmeans_col}={cluster}: {caption}"
+
+        st.image(img_path, caption=caption, width='stretch')
         st.markdown(f"**File:** `{os.path.basename(img_path)}`")
-        st.markdown(f"**Cluster:** `{cluster}`")
+        if cluster is not None and kmeans_col:
+            st.markdown(f"**{kmeans_col}:** `{cluster}`")
     else:
-        st.info("Image preview will appear here after you select a cluster point.")
+        st.info("Image preview will appear here after you select a point in the scatter.")

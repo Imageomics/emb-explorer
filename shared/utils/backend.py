@@ -117,7 +117,8 @@ def resolve_backend(backend: str, operation: str = "general") -> str:
     if cuda_available and has_cuml:
         resolved = "cuml"
         logger.info(f"Auto-resolved {operation} backend to cuML (GPU: {device_info})")
-    elif has_faiss:
+    elif has_faiss and operation == "clustering":
+        # FAISS only accelerates clustering, not dimensionality reduction.
         resolved = "faiss"
         logger.info(f"Auto-resolved {operation} backend to FAISS (CPU)")
     else:
