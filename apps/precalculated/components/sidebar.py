@@ -726,6 +726,9 @@ def _create_projection_dataframe(df: pd.DataFrame, embeddings_2d: np.ndarray) ->
     # Add available metadata columns for tooltips (fill NaN for clean Altair display)
     for col in df.columns:
         if col not in ['uuid', 'emb', 'embedding', 'embeddings'] and col not in df_plot.columns:
-            df_plot[col] = df[col].fillna("N/A").values
+            series = df[col]
+            if hasattr(series, 'cat'):
+                series = series.astype(str)
+            df_plot[col] = series.fillna("N/A").values
 
     return df_plot
