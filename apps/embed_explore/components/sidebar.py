@@ -227,14 +227,20 @@ def _run_kmeans(embeddings, n_clusters, clustering_backend, n_workers, seed):
         st.session_state.labels = labels
         st.session_state.kmeans_column = kmeans_col
 
-        # Compute clustering summary on the full embedding space
+        # Compute clustering summary on the full embedding space.
+        # Cache by kmeans_col so multiple KMeans runs can each have their own
+        # summary + representatives that the user can switch between.
         logger.info("Computing clustering summary statistics...")
         summary_df, representatives = ClusteringService.generate_clustering_summary(
             embeddings, labels, df_plot
         )
-        st.session_state.clustering_summary = summary_df
-        st.session_state.clustering_representatives = representatives
-        logger.info(f"Clustering summary computed: {len(summary_df)} clusters")
+        summaries = st.session_state.get("clustering_summaries", {})
+        reps_by_col = st.session_state.get("clustering_representatives_by_col", {})
+        summaries[kmeans_col] = summary_df
+        reps_by_col[kmeans_col] = representatives
+        st.session_state.clustering_summaries = summaries
+        st.session_state.clustering_representatives_by_col = reps_by_col
+        logger.info(f"Clustering summary computed for {kmeans_col}: {len(summary_df)} clusters")
 
         logger.info(f"KMeans complete: {len(np.unique(labels))} clusters")
         st.success(f"KMeans complete! {len(np.unique(labels))} clusters assigned.")
@@ -254,55 +260,76 @@ def _run_kmeans(embeddings, n_clusters, clustering_backend, n_workers, seed):
         logger.exception("Unexpected KMeans error")
 
 
+def _get_available_kmeans_cols(df_plot) -> list:
+    """Return KMeans columns in df_plot sorted by k value."""
+    if df_plot is None:
+        return []
+    return sorted(
+        [c for c in df_plot.columns if c.startswith("KMeans (k=")],
+        key=lambda c: int(c.split("=")[1].rstrip(")")),
+    )
+
+
 def render_save_section():
-    """Render the save operations section of the sidebar."""
+    """Render the save operations section of the sidebar.
+
+    Both 'Save Images from Specific Cluster' and 'Repartition Images by Cluster'
+    require at least one KMeans run. When multiple KMeans runs exist, the user
+    picks which one to operate on via a shared selector at the top.
+    """
+    df_plot = st.session_state.get("data", None)
+    kmeans_cols = _get_available_kmeans_cols(df_plot)
+
+    if not kmeans_cols:
+        st.info("Run KMeans first to enable saving by cluster.")
+        return
+
+    # Shared selector: which KMeans run drives both save operations
+    default_idx = len(kmeans_cols) - 1  # most recent run
+    selected_kmeans_col = st.selectbox(
+        "KMeans result",
+        options=kmeans_cols,
+        index=default_idx,
+        key="save_kmeans_selector",
+        help="Pick which KMeans run to use for save / repartition.",
+    )
+
     # --- Save images from a specific cluster utility ---
     save_status_placeholder = st.empty()
     with st.expander("Save Images from Specific Cluster", expanded=True):
-        df_plot = st.session_state.get("data", None)
-        kmeans_col = st.session_state.get("kmeans_column", None)
+        available_clusters = sorted(df_plot[selected_kmeans_col].unique(), key=lambda x: int(x))
+        selected_clusters = st.multiselect(
+            "Select cluster(s) to save",
+            available_clusters,
+            default=available_clusters[:1] if available_clusters else [],
+            key="save_cluster_select",
+        )
+        save_dir = st.text_input(
+            "Directory to save selected cluster images",
+            value="cluster_selected_output",
+            key="save_cluster_dir",
+        )
+        save_cluster_button = st.button("Save images", key="save_cluster_btn")
 
-        if df_plot is not None and kmeans_col and kmeans_col in df_plot.columns:
-            st.caption(f"Using **{kmeans_col}** for cluster grouping.")
-            available_clusters = sorted(df_plot[kmeans_col].unique(), key=lambda x: int(x))
-            selected_clusters = st.multiselect(
-                "Select cluster(s) to save",
-                available_clusters,
-                default=available_clusters[:1] if available_clusters else [],
-                key="save_cluster_select"
-            )
-            save_dir = st.text_input(
-                "Directory to save selected cluster images",
-                value="cluster_selected_output",
-                key="save_cluster_dir"
-            )
-            save_cluster_button = st.button("Save images", key="save_cluster_btn")
+        if save_cluster_button and selected_clusters:
+            cluster_rows = df_plot[df_plot[selected_kmeans_col].isin(selected_clusters)].copy()
+            # FileService expects a 'cluster' column
+            cluster_rows["cluster"] = cluster_rows[selected_kmeans_col]
+            max_workers = st.session_state.get("num_threads", 8)
 
-            # Handle save execution
-            if save_cluster_button and selected_clusters:
-                cluster_rows = df_plot[df_plot[kmeans_col].isin(selected_clusters)].copy()
-                # FileService expects a 'cluster' column
-                cluster_rows["cluster"] = cluster_rows[kmeans_col]
-                max_workers = st.session_state.get("num_threads", 8)
-
-                with StreamlitProgressContext(
-                    save_status_placeholder,
-                    f"Images from cluster(s) {', '.join(map(str, selected_clusters))} saved successfully!"
-                ) as progress:
-                    try:
-                        save_summary_df, csv_path = FileService.save_cluster_images(
-                            cluster_rows, save_dir, max_workers, progress_callback=progress
-                        )
-                        st.info(f"Summary CSV saved at {csv_path}")
-
-                    except Exception as e:
-                        save_status_placeholder.error(f"Error saving images: {e}")
-
-            elif save_cluster_button:
-                save_status_placeholder.warning("Please select at least one cluster.")
-
-        else:
-            st.info("Run KMeans first to enable saving by cluster.")
+            with StreamlitProgressContext(
+                save_status_placeholder,
+                f"Images from cluster(s) {', '.join(map(str, selected_clusters))} saved successfully!"
+            ) as progress:
+                try:
+                    save_summary_df, csv_path = FileService.save_cluster_images(
+                        cluster_rows, save_dir, max_workers, progress_callback=progress
+                    )
+                    st.info(f"Summary CSV saved at {csv_path}")
+                except Exception as e:
+                    save_status_placeholder.error(f"Error saving images: {e}")
+        elif save_cluster_button:
+            save_status_placeholder.warning("Please select at least one cluster.")
 
     # --- Repartition expander and status ---
     repartition_status_placeholder = st.empty()
@@ -311,7 +338,7 @@ def render_save_section():
         repartition_dir = st.text_input(
             "Directory",
             value="repartitioned_output",
-            key="repartition_dir"
+            key="repartition_dir",
         )
         max_workers = st.number_input(
             "Number of threads (higher = faster, try 8-32)",
@@ -319,38 +346,24 @@ def render_save_section():
             max_value=64,
             value=8,
             step=1,
-            key="num_threads"
+            key="num_threads",
         )
         repartition_button = st.button("Repartition images by cluster", key="repartition_btn")
 
-        # Handle repartition execution
         if repartition_button:
-            df_plot = st.session_state.get("data", None)
-            kmeans_col = st.session_state.get("kmeans_column", None)
-
-            if df_plot is None or len(df_plot) < 1:
-                repartition_status_placeholder.warning(
-                    "Please run projection first before repartitioning images."
-                )
-            elif not kmeans_col or kmeans_col not in df_plot.columns:
-                repartition_status_placeholder.warning(
-                    "Please run KMeans first before repartitioning images."
-                )
-            else:
-                df_for_repartition = df_plot.copy()
-                df_for_repartition["cluster"] = df_for_repartition[kmeans_col]
-                with StreamlitProgressContext(
-                    repartition_status_placeholder,
-                    f"Repartition complete! Images organized in {repartition_dir}"
-                ) as progress:
-                    try:
-                        repartition_summary_df, csv_path = FileService.repartition_images_by_cluster(
-                            df_for_repartition, repartition_dir, max_workers, progress_callback=progress
-                        )
-                        st.info(f"Summary CSV saved at {csv_path}")
-
-                    except Exception as e:
-                        repartition_status_placeholder.error(f"Error repartitioning images: {e}")
+            df_for_repartition = df_plot.copy()
+            df_for_repartition["cluster"] = df_for_repartition[selected_kmeans_col]
+            with StreamlitProgressContext(
+                repartition_status_placeholder,
+                f"Repartition complete! Images organized in {repartition_dir}",
+            ) as progress:
+                try:
+                    repartition_summary_df, csv_path = FileService.repartition_images_by_cluster(
+                        df_for_repartition, repartition_dir, max_workers, progress_callback=progress
+                    )
+                    st.info(f"Summary CSV saved at {csv_path}")
+                except Exception as e:
+                    repartition_status_placeholder.error(f"Error repartitioning images: {e}")
 
 
 def render_clustering_sidebar():
