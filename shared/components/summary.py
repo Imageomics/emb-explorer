@@ -144,47 +144,74 @@ def render_taxonomic_tree_summary():
 
 
 def render_clustering_summary(show_taxonomy=False):
-    """Render the clustering summary panel using cached results from clustering action."""
+    """Render the clustering summary panel using cached results per KMeans run.
+
+    For the embed_explore app, when multiple KMeans runs exist on df_plot,
+    the user can pick which run's summary + representative images to display.
+    Summaries are cached per kmeans_col by `_run_kmeans` so switching is instant.
+    """
     df_plot = st.session_state.get("data", None)
-    labels = st.session_state.get("labels", None)
 
-    # Get pre-computed summary from session state (computed when clustering was run)
-    summary_df = st.session_state.get("clustering_summary", None)
-    representatives = st.session_state.get("clustering_representatives", None)
-
-    if df_plot is not None:
-        has_images = 'image_path' in df_plot.columns
-
-        if has_images:
-            # embed_explore app: show full clustering summary with representative images
-            if labels is not None:
-                st.subheader("Clustering Summary")
-
-                if summary_df is not None and representatives is not None:
-                    logger.debug("Displaying cached clustering summary")
-                    st.dataframe(summary_df, hide_index=True, width='stretch')
-
-                    st.markdown("#### Representative Images")
-                    for row in summary_df.itertuples():
-                        k = row.Cluster
-                        st.markdown(f"**Cluster {k}**")
-                        img_cols = st.columns(3)
-                        for i, img_idx in enumerate(representatives[k]):
-                            img_path = df_plot.iloc[img_idx]["image_path"]
-                            logger.debug(f"Displaying representative image: {img_path}")
-                            img_cols[i].image(
-                                img_path,
-                                width='stretch',
-                                caption=os.path.basename(img_path)
-                            )
-                else:
-                    st.info("Clustering summary will be computed when you run clustering.")
-        else:
-            # Precalculated app: show taxonomy tree (works with or without KMeans)
-            if show_taxonomy:
-                filtered_df = st.session_state.get("filtered_df_for_clustering", None)
-                if filtered_df is not None:
-                    render_taxonomic_tree_summary()
-
-    else:
+    if df_plot is None:
         st.info("Summary will appear here after projection.")
+        return
+
+    has_images = 'image_path' in df_plot.columns
+
+    if has_images:
+        # embed_explore app: full clustering summary with representative images
+        kmeans_cols = sorted(
+            [c for c in df_plot.columns if c.startswith("KMeans (k=")],
+            key=lambda c: int(c.split("=")[1].rstrip(")")),
+        )
+
+        if not kmeans_cols:
+            st.subheader("Clustering Summary")
+            st.info("Run KMeans to see the clustering summary and representative images.")
+            return
+
+        summaries = st.session_state.get("clustering_summaries", {}) or {}
+        reps_by_col = st.session_state.get("clustering_representatives_by_col", {}) or {}
+
+        st.subheader("Clustering Summary")
+        default_idx = len(kmeans_cols) - 1  # most recent run
+        selected_kmeans_col = st.selectbox(
+            "KMeans result",
+            options=kmeans_cols,
+            index=default_idx,
+            key="summary_kmeans_selector",
+            help="Select which KMeans run to view summary + representative images for.",
+        )
+
+        summary_df = summaries.get(selected_kmeans_col)
+        representatives = reps_by_col.get(selected_kmeans_col)
+
+        if summary_df is None or representatives is None:
+            st.info(
+                f"No cached summary for {selected_kmeans_col}. "
+                "Re-run KMeans with this k to regenerate it."
+            )
+            return
+
+        logger.debug(f"Displaying cached clustering summary for {selected_kmeans_col}")
+        st.dataframe(summary_df, hide_index=True, width='stretch')
+
+        st.markdown("#### Representative Images")
+        for row in summary_df.itertuples():
+            k = row.Cluster
+            st.markdown(f"**Cluster {k}**")
+            img_cols = st.columns(3)
+            for i, img_idx in enumerate(representatives[k]):
+                img_path = df_plot.iloc[img_idx]["image_path"]
+                logger.debug(f"Displaying representative image: {img_path}")
+                img_cols[i].image(
+                    img_path,
+                    width='stretch',
+                    caption=os.path.basename(img_path),
+                )
+    else:
+        # Precalculated app: show taxonomy tree (works with or without KMeans)
+        if show_taxonomy:
+            filtered_df = st.session_state.get("filtered_df_for_clustering", None)
+            if filtered_df is not None:
+                render_taxonomic_tree_summary()

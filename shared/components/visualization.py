@@ -77,54 +77,51 @@ def _render_chart_fragment(df_plot):
         else:
             heatmap_bins = 40  # Default, not used
 
-    # Determine color column
-    if is_precalculated:
-        # Build list of colorable columns
-        skip_color_cols = {'x', 'y', 'idx', 'uuid', 'emb', 'embedding', 'embeddings', 'vector',
-                           'identifier', 'image_url', 'url', 'img_url', 'image'}
-        colorable_cols = [c for c in df_plot.columns
-                          if c not in skip_color_cols and df_plot[c].nunique() <= 100]
+    # Determine color column — same dropdown pattern for both apps.
+    # Build list of colorable columns (skip technical/identifier columns).
+    skip_color_cols = {'x', 'y', 'idx', 'uuid', 'emb', 'embedding', 'embeddings', 'vector',
+                       'identifier', 'image_url', 'url', 'img_url', 'image',
+                       'image_path', 'file_name'}
+    colorable_cols = [c for c in df_plot.columns
+                      if c not in skip_color_cols and df_plot[c].nunique() <= 100]
 
-        # Sort KMeans columns to front (all runs, sorted by k)
-        kmeans_cols = sorted(
-            [c for c in colorable_cols if c.startswith("KMeans (k=")],
-            key=lambda c: int(c.split("=")[1].rstrip(")"))
+    # Sort KMeans columns to front (all runs, sorted by k)
+    kmeans_cols = sorted(
+        [c for c in colorable_cols if c.startswith("KMeans (k=")],
+        key=lambda c: int(c.split("=")[1].rstrip(")"))
+    )
+    other_cols = [c for c in colorable_cols if not c.startswith("KMeans (k=")]
+    colorable_cols = kmeans_cols + other_cols
+
+    # Build unique count lookup for display
+    col_nunique = {c: df_plot[c].nunique() for c in colorable_cols}
+
+    if colorable_cols:
+        color_col = st.selectbox(
+            "Color by",
+            options=["(none)"] + colorable_cols,
+            index=0,
+            key="color_by_column",
+            format_func=lambda c: c if c == "(none)" else f"{c} ({col_nunique[c]})",
+            help="Select a column to color the points by"
         )
-        other_cols = [c for c in colorable_cols if not c.startswith("KMeans (k=")]
-        colorable_cols = kmeans_cols + other_cols
-
-        # Build unique count lookup for display
-        col_nunique = {c: df_plot[c].nunique() for c in colorable_cols}
-
-        if colorable_cols:
-            color_col = st.selectbox(
-                "Color by",
-                options=["(none)"] + colorable_cols,
-                index=0,
-                key="color_by_column",
-                format_func=lambda c: c if c == "(none)" else f"{c} ({col_nunique[c]})",
-                help="Select a column to color the points by"
-            )
-            if color_col == "(none)":
-                color_col = None
-        else:
+        if color_col == "(none)":
             color_col = None
-
-        # Warning for high cardinality
-        if color_col and df_plot[color_col].nunique() > 20:
-            st.warning(f"'{color_col}' has {df_plot[color_col].nunique()} unique values. Colors may repeat.")
-
-        # Trigger full page rerun when color changes (so bottom section updates).
-        # Use a sentinel to distinguish "never set" from "set to None".
-        _sentinel = object()
-        prev_color = st.session_state.get("_prev_color_by", _sentinel)
-        if color_col != prev_color:
-            st.session_state["_prev_color_by"] = color_col
-            if prev_color is not _sentinel:
-                st.rerun(scope="app")
     else:
-        # embed_explore app: always color by cluster
-        color_col = 'cluster' if 'cluster' in df_plot.columns else None
+        color_col = None
+
+    # Warning for high cardinality
+    if color_col and df_plot[color_col].nunique() > 20:
+        st.warning(f"'{color_col}' has {df_plot[color_col].nunique()} unique values. Colors may repeat.")
+
+    # Trigger full page rerun when color changes (so bottom section updates).
+    # Use a sentinel to distinguish "never set" from "set to None".
+    _sentinel = object()
+    prev_color = st.session_state.get("_prev_color_by", _sentinel)
+    if color_col != prev_color:
+        st.session_state["_prev_color_by"] = color_col
+        if prev_color is not _sentinel:
+            st.rerun(scope="app")
 
     point_selector = alt.selection_point(fields=["idx"], name="point_selection")
 
@@ -133,13 +130,11 @@ def _render_chart_fragment(df_plot):
     skip_cols = {'x', 'y', 'idx', 'emb', 'embedding', 'embeddings', 'vector',
                  'uuid', 'identifier', 'image_url', 'url', 'img_url', 'image'}
 
-    # For embed_explore, include cluster/cluster_name in tooltip
-    if not is_precalculated:
-        if 'cluster_name' in df_plot.columns:
-            tooltip_fields.append('cluster_name:N')
-        elif 'cluster' in df_plot.columns:
-            tooltip_fields.append('cluster:N')
-        skip_cols.update({'cluster', 'cluster_name'})
+    # For embed_explore, include the file_name in the tooltip for quick reference
+    if not is_precalculated and 'file_name' in df_plot.columns:
+        tooltip_fields.append('file_name:N')
+        skip_cols.add('file_name')
+    skip_cols.add('image_path')
 
     # Add the color column first if set (and not already in tooltip)
     if color_col and color_col not in skip_cols:

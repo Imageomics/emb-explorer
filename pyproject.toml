@@ -69,13 +69,13 @@ gpu = [
 ]
 gpu-cu12 = [
     "torch>=2.0.0",
-    "cuml-cu12>=25.6",
+    "cuml-cu12>=26.4",  # 26.4 removed the sklearn upper bound (compatible with sklearn>=1.8)
     "faiss-gpu-cu12>=1.11.0",
     "pynvml>=11.0.0",
 ]
 gpu-cu13 = [
     "torch>=2.0.0",
-    "cuml-cu13>=25.12",
+    "cuml-cu13>=26.4",  # 26.4 removed the sklearn upper bound (compatible with sklearn>=1.8)
     "faiss-gpu-cu12>=1.11.0",  # no cu13 build on PyPI; cu12 works via CUDA backward compat
     "pynvml>=11.0.0",
 ]
