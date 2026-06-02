@@ -14,6 +14,18 @@ from shared.utils.backend import (
 
 logger = get_logger(__name__)
 
+# Auto-enable scikit-learn-intelex (Intel oneDAL) acceleration for sklearn's
+# PCA / TSNE / KMeans on CPU. Patches sklearn at import time so any downstream
+# sklearn call gets the accelerated path transparently. Disable for debugging
+# vanilla sklearn behavior with: EMB_EXPLORER_DISABLE_SKLEARNEX=1
+if os.environ.get("EMB_EXPLORER_DISABLE_SKLEARNEX", "0") != "1":
+    try:
+        from sklearnex import patch_sklearn
+        patch_sklearn()
+        logger.info("scikit-learn-intelex enabled (CPU sklearn auto-accelerated)")
+    except ImportError:
+        logger.debug("scikit-learn-intelex not installed; using vanilla sklearn")
+
 # Legacy module-level flags — now backed by lightweight find_spec() checks
 # so importing this module no longer triggers heavy library loads.
 # Functions that actually need the libraries import them locally.
