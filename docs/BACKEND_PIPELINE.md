@@ -12,11 +12,11 @@ Raw Embeddings (from parquet or model)
   ├─ L2 Normalize: project onto unit hypersphere
   │
   ├─► Step 1: KMeans Clustering (high-dimensional)
-  │     Backend: cuML → FAISS → sklearn
+  │     Backend: cuML (GPU) → sklearn (CPU)
   │
   ├─► Step 2: Dimensionality Reduction to 2D
   │     Method:  PCA / t-SNE / UMAP
-  │     Backend: cuML → sklearn
+  │     Backend: cuML (GPU) → sklearn (CPU)
   │
   └─► Scatter Plot (Altair)
         Color = cluster, position = 2D projection
@@ -46,10 +46,9 @@ feature space, not a lossy 2D projection.
 | Backend | When It's Used | How It Works |
 |---------|---------------|--------------|
 | **cuML** | GPU available + >500 samples | GPU-accelerated KMeans via RAPIDS. Runs on CuPy arrays. Falls back to sklearn on any error. |
-| **FAISS** | No GPU + >500 samples | Facebook's optimized CPU KMeans using L2 index. Fast for medium datasets. Falls back to sklearn on error. |
-| **sklearn** | Small datasets or fallback | Standard scikit-learn KMeans. Always works, no special dependencies. |
+| **sklearn** | CPU path (default on machines without a GPU) | Standard scikit-learn KMeans. Always works, no special dependencies. |
 
-**Auto-selection priority:** cuML > FAISS > sklearn. You can override in the sidebar.
+**Auto-selection priority:** cuML > sklearn. You can override in the sidebar.
 
 ## Step 2: Dimensionality Reduction
 
@@ -96,7 +95,7 @@ When you select "auto" (the default), the app picks the fastest available backen
 
 | Operation | Auto Logic |
 |-----------|-----------|
-| KMeans | cuML if GPU + >500 samples, else FAISS if available + >500 samples, else sklearn |
+| KMeans | cuML if GPU + >500 samples, else sklearn |
 | Dim. Reduction | cuML if GPU + >5000 samples, else sklearn |
 
 Any GPU error (architecture mismatch, missing libraries, out of memory (OOM)) triggers an
@@ -120,9 +119,6 @@ Check the log file for the full picture when debugging.
 
 ```
 cuML (GPU)
-  │ error?
-  ▼
-FAISS (CPU, optimized)     ← KMeans only
   │ error?
   ▼
 sklearn (CPU, always works)

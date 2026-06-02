@@ -5,7 +5,7 @@ Shared clustering controls component.
 import streamlit as st
 from typing import Tuple, Optional
 
-from shared.utils.backend import HAS_FAISS_PACKAGE, HAS_CUML_PACKAGE, HAS_CUPY_PACKAGE
+from shared.utils.backend import HAS_CUML_PACKAGE, HAS_CUPY_PACKAGE
 
 
 def render_clustering_backend_controls():
@@ -18,9 +18,6 @@ def render_clustering_backend_controls():
     # Backend availability detection — uses find_spec() flags (instant, no heavy imports)
     dim_reduction_options = ["auto", "sklearn"]
     clustering_options = ["auto", "sklearn"]
-
-    if HAS_FAISS_PACKAGE:
-        clustering_options.append("faiss")
 
     if HAS_CUML_PACKAGE and HAS_CUPY_PACKAGE:
         dim_reduction_options.append("cuml")
@@ -73,7 +70,7 @@ def render_clustering_backend_controls():
                 max_value=64, 
                 value=8, 
                 step=1,
-                help="Number of parallel workers for CPU backends (sklearn, FAISS). Not used by cuML (GPU manages parallelization automatically)."
+                help="Number of parallel workers for CPU sklearn. Not used by cuML (GPU manages parallelization automatically)."
             )
         
     
@@ -118,8 +115,6 @@ def render_kmeans_controls():
         Tuple of (clustering_backend, n_workers, seed)
     """
     clustering_options = ["auto", "sklearn"]
-    if HAS_FAISS_PACKAGE:
-        clustering_options.append("faiss")
     if HAS_CUML_PACKAGE and HAS_CUPY_PACKAGE:
         clustering_options.append("cuml")
 

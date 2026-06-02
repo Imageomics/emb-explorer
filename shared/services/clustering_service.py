@@ -38,8 +38,8 @@ class ClusteringService:
             n_clusters: Number of clusters
             reduction_method: Dimensionality reduction method
             n_workers: Number of workers for reduction
-            dim_reduction_backend: Backend for dimensionality reduction ("auto", "sklearn", "faiss", "cuml")
-            clustering_backend: Backend for clustering ("auto", "sklearn", "faiss", "cuml")
+            dim_reduction_backend: Backend for dimensionality reduction ("auto", "sklearn", "cuml")
+            clustering_backend: Backend for clustering ("auto", "sklearn", "cuml")
             seed: Random seed for reproducibility (None for random)
 
         Returns:

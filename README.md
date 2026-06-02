@@ -55,7 +55,7 @@ uv pip install -e ".[gpu-cu12]"
 uv pip install -e ".[gpu-cu13]"
 ```
 
-The app auto-detects GPU availability at runtime and falls back to CPU if anything goes wrong — no configuration needed. You can also manually select backends (cuML, FAISS, sklearn) in the sidebar.
+The app auto-detects GPU availability at runtime and falls back to CPU if anything goes wrong — no configuration needed. You can also manually select backends (cuML, sklearn) in the sidebar.
 
 ## Usage
 

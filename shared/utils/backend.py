@@ -20,7 +20,6 @@ logger = get_logger(__name__)
 # These are safe to call at module-load / render time — they only check
 # whether the package is installed, without executing it.
 
-HAS_FAISS_PACKAGE: bool = importlib.util.find_spec("faiss") is not None
 HAS_CUML_PACKAGE: bool = importlib.util.find_spec("cuml") is not None
 HAS_CUPY_PACKAGE: bool = importlib.util.find_spec("cupy") is not None
 HAS_TORCH_PACKAGE: bool = importlib.util.find_spec("torch") is not None
@@ -84,27 +83,16 @@ def check_cuml_available() -> bool:
         return False
 
 
-def check_faiss_available() -> bool:
-    """Check if FAISS is available (actual import, for runtime use)."""
-    if not HAS_FAISS_PACKAGE:
-        return False
-    try:
-        import faiss
-        return True
-    except ImportError:
-        return False
-
-
 def resolve_backend(backend: str, operation: str = "general") -> str:
     """
     Resolve 'auto' backend to actual backend based on available hardware.
 
     Args:
-        backend: Requested backend ("auto", "sklearn", "cuml", "faiss")
+        backend: Requested backend ("auto", "sklearn", "cuml")
         operation: Operation type for logging ("clustering", "reduction", "general")
 
     Returns:
-        Resolved backend name
+        Resolved backend name. CPU paths always go through sklearn.
     """
     if backend != "auto":
         logger.debug(f"Using explicitly requested backend: {backend}")
@@ -112,14 +100,10 @@ def resolve_backend(backend: str, operation: str = "general") -> str:
 
     cuda_available, device_info = check_cuda_available()
     has_cuml = check_cuml_available()
-    has_faiss = check_faiss_available()
 
     if cuda_available and has_cuml:
         resolved = "cuml"
         logger.info(f"Auto-resolved {operation} backend to cuML (GPU: {device_info})")
-    elif has_faiss:
-        resolved = "faiss"
-        logger.info(f"Auto-resolved {operation} backend to FAISS (CPU)")
     else:
         resolved = "sklearn"
         logger.info(f"Auto-resolved {operation} backend to sklearn (CPU)")
@@ -140,7 +124,6 @@ def get_backend_info() -> dict:
         "cuda_available": cuda_available,
         "device_info": device_info,
         "cuml_available": check_cuml_available(),
-        "faiss_available": check_faiss_available(),
     }
 
 
