@@ -12,11 +12,11 @@ Raw Embeddings (from parquet or model)
   ├─ L2 Normalize: project onto unit hypersphere
   │
   ├─► Step 1: KMeans Clustering (high-dimensional)
-  │     Backend: cuML (GPU) → sklearn (CPU, auto-accelerated by sklearn-intelex)
+  │     Backend: cuML (GPU) → sklearn (CPU, auto-accelerated by `sklearn-intelex` [^1])
   │
   ├─► Step 2: Dimensionality Reduction to 2D
   │     Method:  PCA / t-SNE / UMAP
-  │     Backend: cuML (GPU) → sklearn (CPU, auto-accelerated by sklearn-intelex for PCA/TSNE)
+  │     Backend: cuML (GPU) → sklearn (CPU, auto-accelerated by `sklearn-intelex` for PCA/TSNE [^1])
   │
   └─► Scatter Plot (Altair)
         Color = cluster, position = 2D projection
@@ -95,7 +95,7 @@ When you select "auto" (the default), the app picks the fastest available backen
 
 | Operation | Auto Logic |
 |-----------|-----------|
-| KMeans | cuML if GPU + >500 samples, else sklearn (auto-accelerated by sklearn-intelex when installed) |
+| KMeans | cuML if GPU + >500 samples, else sklearn (auto-accelerated by `sklearn-intelex` when installed [^1]) |
 | Dim. Reduction | cuML if GPU + >5000 samples, else sklearn (auto-accelerated by sklearn-intelex for PCA / t-SNE) |
 
 Any GPU error (architecture mismatch, missing libraries, out of memory (OOM)) triggers an
@@ -126,3 +126,5 @@ sklearn (CPU, always works)
 
 The app is designed to *always produce a result*. GPU acceleration is a
 nice-to-have, never a hard requirement.
+
+[^1]: [`sklearn-intelex`](https://github.com/uxlfoundation/scikit-learn-intelex) is powered by the [oneDAL](https://github.com/uxlfoundation/oneDAL) library that provides accelerations on x86_64 Linux and Windows machines, and silently fall back to vanilla `sklearn` on unsupported architectures like Apple Silicon and ARM Linux. The package is under the [UXL Foundation](https://github.com/uxlfoundation) (a Linux Foundation project) so cross-vendor support is a stated goal.

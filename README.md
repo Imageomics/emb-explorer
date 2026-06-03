@@ -55,7 +55,7 @@ uv pip install -e ".[gpu-cu12]"
 uv pip install -e ".[gpu-cu13]"
 ```
 
-The app auto-detects GPU availability at runtime and falls back to CPU if anything goes wrong — no configuration needed. The CPU sklearn path is auto-accelerated by [scikit-learn-intelex](https://github.com/uxlfoundation/scikit-learn-intelex) (Intel oneDAL). You can also manually select backends (cuML, sklearn) in the sidebar.
+The app auto-detects GPU availability at runtime and falls back to CPU if anything goes wrong — no configuration needed. The CPU sklearn path is auto-accelerated by [scikit-learn-intelex](https://github.com/uxlfoundation/scikit-learn-intelex) [^1]. You can also manually select backends (`cuML`, `sklearn`) in the sidebar.
 
 ## Usage
 
@@ -96,3 +96,5 @@ ssh -N -L 8501:<COMPUTE_NODE>:8501 <USER>@<LOGIN_NODE>
 ## Acknowledgements
 
 [OpenCLIP](https://github.com/mlfoundations/open_clip) | [Streamlit](https://streamlit.io/) | [Altair](https://altair-viz.github.io/)
+
+[^1]: [`sklearn-intelex`](https://github.com/uxlfoundation/scikit-learn-intelex) is powered by the [oneDAL](https://github.com/uxlfoundation/oneDAL) library that provides accelerations on x86_64 Linux and Windows machines, and silently fall back to vanilla `sklearn` on unsupported architectures like Apple Silicon and ARM Linux. The package is under the [UXL Foundation](https://github.com/uxlfoundation) (a Linux Foundation project) so cross-vendor support is a stated goal.
