@@ -43,7 +43,7 @@ dependencies = [
     "scikit-learn>=1.0.0",
     # Intel oneDAL acceleration for sklearn (PCA / TSNE / KMeans) auto-patched at runtime.
     # Disable with EMB_EXPLORER_DISABLE_SKLEARNEX=1 if you need vanilla sklearn behavior for debugging.
-    "scikit-learn-intelex>=2025.0",
+    "scikit-learn-intelex>=2025.0; platform_machine == 'AMD64' or platform_machine == 'x86_64'",
     "umap-learn>=0.5.0",
     "numba>=0.57.0",
     # Vision-language models
