@@ -12,15 +12,17 @@ Raw Embeddings (from parquet or model)
   ├─ L2 Normalize: project onto unit hypersphere
   │
   ├─► Step 1: KMeans Clustering (high-dimensional)
-  │     Backend: cuML (GPU) → sklearn (CPU, auto-accelerated by `sklearn-intelex` [^1])
+  │     Backend: cuML (GPU) → sklearn (CPU, auto-accelerated by `sklearn-intelex`)
   │
   ├─► Step 2: Dimensionality Reduction to 2D
   │     Method:  PCA / t-SNE / UMAP
-  │     Backend: cuML (GPU) → sklearn (CPU, auto-accelerated by `sklearn-intelex` for PCA/TSNE [^1])
+  │     Backend: cuML (GPU) → sklearn (CPU, auto-accelerated by `sklearn-intelex` for PCA/TSNE)
   │
   └─► Scatter Plot (Altair)
         Color = cluster, position = 2D projection
 ```
+
+Note that `sklearn-intelex` acceleration is used for CPU operations where available[^1].
 
 ## Step 0: Embedding Preparation
 
@@ -46,7 +48,7 @@ feature space, not a lossy 2D projection.
 | Backend | When It's Used | How It Works |
 |---------|---------------|--------------|
 | **cuML** | GPU available + >500 samples | GPU-accelerated KMeans via RAPIDS. Runs on CuPy arrays. Falls back to sklearn on any error. |
-| **sklearn** | CPU path (default on machines without a GPU) | Standard scikit-learn KMeans, auto-accelerated by [scikit-learn-intelex](https://github.com/uxlfoundation/scikit-learn-intelex) (Intel oneDAL) when installed — typically 10–17× faster than vanilla sklearn on CPU. Disable with `EMB_EXPLORER_DISABLE_SKLEARNEX=1`. |
+| **sklearn** | CPU path (default on machines without a GPU) | Standard scikit-learn KMeans, auto-accelerated by [scikit-learn-intelex](https://github.com/uxlfoundation/scikit-learn-intelex) (Intel oneDAL) when installed[^1] — typically 10–17× faster than vanilla sklearn on CPU. Disable with `EMB_EXPLORER_DISABLE_SKLEARNEX=1`. |
 
 **Auto-selection priority:** cuML > sklearn. You can override in the sidebar.
 
@@ -95,7 +97,7 @@ When you select "auto" (the default), the app picks the fastest available backen
 
 | Operation | Auto Logic |
 |-----------|-----------|
-| KMeans | cuML if GPU + >500 samples, else sklearn (auto-accelerated by `sklearn-intelex` when installed [^1]) |
+| KMeans | cuML if GPU + >500 samples, else sklearn (auto-accelerated by `sklearn-intelex` when installed[^1]) |
 | Dim. Reduction | cuML if GPU + >5000 samples, else sklearn (auto-accelerated by sklearn-intelex for PCA / t-SNE) |
 
 Any GPU error (architecture mismatch, missing libraries, out of memory (OOM)) triggers an
