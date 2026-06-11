@@ -41,9 +41,11 @@ dependencies = [
     "altair>=5.0.0",
     # Machine learning
     "scikit-learn>=1.0.0",
+    # Intel oneDAL acceleration for sklearn (PCA / TSNE / KMeans) auto-patched at runtime.
+    # Disable with EMB_EXPLORER_DISABLE_SKLEARNEX=1 if you need vanilla sklearn behavior for debugging.
+    "scikit-learn-intelex>=2025.0; platform_machine == 'AMD64' or platform_machine == 'x86_64'",
     "umap-learn>=0.5.0",
-    "numba>=0.57.0", 
-    "faiss-cpu>=1.7.0",
+    "numba>=0.57.0",
     # Vision-language models
     "open-clip-torch>=2.20.0",
     # Custom inference package
@@ -69,20 +71,17 @@ gpu = [
 ]
 gpu-cu12 = [
     "torch>=2.0.0",
-    "cuml-cu12>=25.6",
-    "faiss-gpu-cu12>=1.11.0",
+    "cuml-cu12>=26.4",  # 26.4 removed the sklearn upper bound (compatible with sklearn>=1.8)
     "pynvml>=11.0.0",
 ]
 gpu-cu13 = [
     "torch>=2.0.0",
-    "cuml-cu13>=25.12",
-    "faiss-gpu-cu12>=1.11.0",  # no cu13 build on PyPI; cu12 works via CUDA backward compat
+    "cuml-cu13>=26.4",  # 26.4 removed the sklearn upper bound (compatible with sklearn>=1.8)
     "pynvml>=11.0.0",
 ]
-# Minimal GPU support (just PyTorch + FAISS GPU, no RAPIDS)
+# Minimal GPU support for image embeddings generation (just PyTorch, no RAPIDS)
 gpu-minimal = [
     "torch>=2.0.0",
-    "faiss-gpu-cu12>=1.11.0",
 ]
 all = [
     "emb-explorer[dev,gpu]",

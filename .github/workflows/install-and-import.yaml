@@ -1,0 +1,59 @@
+name: install + import
+
+# CI matrix: verify the package installs cleanly and core modules
+# import on every supported (OS, Python) pair, per pkg pyproject.toml's
+# requires-python = ">=3.10,<3.14".
+on:
+  pull_request:
+  workflow_dispatch:  # allow manual reruns from the Actions tab
+
+jobs:
+  install-and-import:
+    name: ${{ matrix.os }} / py${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # Don't abort the whole matrix on a single failure so we can see all platforms.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ['3.10', '3.11', '3.12', '3.13']
+    steps:
+      - uses: actions/checkout@v4
+
+      # uv is our package manager of record, mirrors what users do locally.
+      - uses: astral-sh/setup-uv@v6
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # CPU-only install. gpu-cu12 / gpu-cu13 extras are skipped on CI runners
+      # (no NVIDIA hardware, CUDA wheels are large and slow to resolve).
+      - name: Install package
+        run: uv pip install --system -e .
+
+      # Smoke-test that the modules that get patched or accelerated import
+      # cleanly, and that both Streamlit app entry points are importable.
+      - name: Import smoke test
+        run: |
+          python -c "import shared.utils.clustering"
+          python -c "import apps.precalculated.app"
+          python -c "import apps.embed_explore.app"
+
+      # On x86_64 / AMD64 sklearnex must install (the platform marker in
+      # pyproject.toml ensures it). On macos-latest (arm64) it must NOT
+      # install, which is the whole point of the marker.
+      - name: Verify sklearnex matches platform marker
+        shell: python
+        run: |
+          import platform
+          import importlib.util
+          on_x86 = platform.machine() in ('x86_64', 'AMD64')
+          present = importlib.util.find_spec('sklearnex') is not None
+          if on_x86:
+              assert present, 'sklearnex should be installed on x86_64/AMD64'
+              import sklearnex
+              print(f'sklearnex {sklearnex.__version__} present on {platform.machine()}')
+          else:
+              assert not present, f'sklearnex must not install on {platform.machine()}'
+              print(f'sklearnex correctly absent on {platform.machine()}')
