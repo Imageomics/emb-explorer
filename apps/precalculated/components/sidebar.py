@@ -148,85 +148,149 @@ def get_cascading_options(
         return column_info.get(target_column, {}).get('unique_values', []) or []
 
 
+# Curated demo datasets shown as clickable cards on the precalculated app's
+# landing area. Each entry is rendered as a colored card; clicking "Load"
+# triggers _load_parquet_path() with the configured path.
+DEMO_DATASETS = [
+    {
+        "key": "darwin_finches",
+        "name": "Darwin's Finches",
+        "emoji": "🐦",
+        "color": "#3f6b52",  # deep muted forest green — mid-dark, fits dark mode without glare
+        "description": (
+            "677 images of 17 finch species from the Galápagos adaptive "
+            "radiation. BioCLIP 2 embeddings, 768-d."
+        ),
+        "path": (
+            "/fs/scratch/PAS2136/TreeOfLife/analytics/Darwins_Finches/"
+            "embeddings/model=BioCLIP_2"
+        ),
+        "enabled": True,
+    },
+    {
+        "key": "wolves",
+        "name": "Wolves",
+        "emoji": "🐺",
+        "color": "#854d0e",  # deep amber/brown — works well in light + dark mode
+        "description": (
+            "960 images across 8 Canis species, stratified by image type. "
+            "BioCLIP 2 embeddings, 768-d."
+        ),
+        "path": "/fs/scratch/PAS2136/TreeOfLife/analytics/wolf_sample/wolf_sample.parquet",
+        "enabled": True,
+    },
+]
+
+
+def _load_parquet_path(file_path: str) -> bool:
+    """Load a parquet file/directory and populate session state.
+
+    Returns True on success, False on validation failure or error.
+    """
+    if not os.path.exists(file_path):
+        st.error(f"File not found: {file_path}")
+        return False
+
+    try:
+        logger.info(f"Loading parquet file: {file_path}")
+        with st.spinner("Loading parquet file..."):
+            table = pq.read_table(file_path)
+            df = table.to_pandas()
+
+        logger.info(f"Loaded {len(df):,} records, {len(table.column_names)} columns, "
+                    f"schema: {[f'{c.name}({c.type})' for c in table.schema]}")
+
+        # Validate required columns
+        if 'uuid' not in table.column_names:
+            st.error("Missing required 'uuid' column")
+            logger.error("Parquet validation failed: missing 'uuid' column")
+            return False
+        if 'emb' not in table.column_names:
+            st.error("Missing required 'emb' column")
+            logger.error("Parquet validation failed: missing 'emb' column")
+            return False
+
+        emb_dim = len(df['emb'].iloc[0])
+        logger.info(f"Embedding dimension: {emb_dim}")
+
+        # Dynamically analyze all columns
+        column_info = get_column_info_dynamic(table)
+        logger.info(f"Column analysis: {len(column_info)} filterable columns "
+                    f"({sum(1 for v in column_info.values() if v['type'] == 'categorical')} categorical, "
+                    f"{sum(1 for v in column_info.values() if v['type'] == 'numeric')} numeric, "
+                    f"{sum(1 for v in column_info.values() if v['type'] == 'text')} text)")
+
+        # Store in session state
+        st.session_state.parquet_table = table
+        st.session_state.parquet_df = df
+        st.session_state.parquet_file_path = file_path
+        st.session_state.column_info = column_info
+
+        # Initialize filtered_df to full dataset (filtering is optional)
+        st.session_state.filtered_df = df
+        st.session_state.embeddings = None
+        st.session_state.data = None
+        st.session_state.labels = None
+        st.session_state.selected_image_idx = None
+        st.session_state.active_filters = {}
+        st.session_state.pending_filters = {}
+
+        st.success(f"Loaded {len(df):,} records with {len(column_info)} filterable columns")
+        st.info(f"Embedding dimension: {emb_dim}")
+        return True
+
+    except Exception as e:
+        st.error(f"Error loading file: {e}")
+        logger.exception(f"Failed to load parquet file: {file_path}")
+        return False
+
+
 def render_file_section() -> Tuple[bool, Optional[str]]:
     """
-    Render the file loading section.
+    Render the dataset selection section as a grid of cards.
+
+    Each card represents a curated demo dataset. Clicking "Load" on an
+    enabled card populates session state via _load_parquet_path().
 
     Returns:
         Tuple of (file_loaded, file_path)
     """
-    with st.expander("📁 Load Parquet", expanded=True):
-        file_path = st.text_input(
-            "Parquet file or directory path",
-            value=st.session_state.get("parquet_file_path", ""),
-            help="Path to a parquet file or directory of parquet files containing embeddings and metadata"
-        )
+    st.markdown("### 📊 Choose a dataset")
 
-        load_button = st.button("Load File", type="primary")
+    cols = st.columns(len(DEMO_DATASETS))
+    loaded_path: Optional[str] = None
 
-        if load_button and file_path and os.path.exists(file_path):
-            try:
-                logger.info(f"Loading parquet file: {file_path}")
-                with st.spinner("Loading parquet file..."):
-                    table = pq.read_table(file_path)
-                    df = table.to_pandas()
+    for col, ds in zip(cols, DEMO_DATASETS):
+        with col:
+            with st.container(border=True):
+                # Colored emoji header band — visual differentiator per dataset
+                st.markdown(
+                    f'<div style="background-color: {ds["color"]}; padding: 12px; '
+                    f'border-radius: 6px; margin-bottom: 10px; text-align: center;">'
+                    f'<span style="font-size: 40px;">{ds["emoji"]}</span></div>',
+                    unsafe_allow_html=True,
+                )
+                st.markdown(f"**{ds['name']}**")
+                st.caption(ds["description"])
 
-                logger.info(f"Loaded {len(df):,} records, {len(table.column_names)} columns, "
-                            f"schema: {[f'{c.name}({c.type})' for c in table.schema]}")
+                if ds["enabled"]:
+                    if st.button(
+                        "Load",
+                        key=f"load_{ds['key']}",
+                        type="primary",
+                        width="stretch",
+                    ):
+                        if _load_parquet_path(ds["path"]):
+                            loaded_path = ds["path"]
+                else:
+                    st.button(
+                        "Coming soon",
+                        key=f"load_{ds['key']}",
+                        disabled=True,
+                        width="stretch",
+                    )
 
-                # Validate required columns
-                if 'uuid' not in table.column_names:
-                    st.error("Missing required 'uuid' column")
-                    logger.error("Parquet validation failed: missing 'uuid' column")
-                    return False, file_path
-                if 'emb' not in table.column_names:
-                    st.error("Missing required 'emb' column")
-                    logger.error("Parquet validation failed: missing 'emb' column")
-                    return False, file_path
-
-                emb_dim = len(df['emb'].iloc[0])
-                logger.info(f"Embedding dimension: {emb_dim}")
-
-                # Dynamically analyze all columns
-                column_info = get_column_info_dynamic(table)
-                logger.info(f"Column analysis: {len(column_info)} filterable columns "
-                            f"({sum(1 for v in column_info.values() if v['type'] == 'categorical')} categorical, "
-                            f"{sum(1 for v in column_info.values() if v['type'] == 'numeric')} numeric, "
-                            f"{sum(1 for v in column_info.values() if v['type'] == 'text')} text)")
-
-                # Store in session state
-                st.session_state.parquet_table = table
-                st.session_state.parquet_df = df
-                st.session_state.parquet_file_path = file_path
-                st.session_state.column_info = column_info
-
-                # Initialize filtered_df to full dataset (filtering is optional)
-                st.session_state.filtered_df = df
-                st.session_state.embeddings = None
-                st.session_state.data = None
-                st.session_state.labels = None
-                st.session_state.selected_image_idx = None
-                st.session_state.active_filters = {}
-                st.session_state.pending_filters = {}
-
-                st.success(f"Loaded {len(df):,} records with {len(column_info)} filterable columns")
-                st.info(f"Embedding dimension: {emb_dim}")
-
-                return True, file_path
-
-            except Exception as e:
-                st.error(f"Error loading file: {e}")
-                logger.exception(f"Failed to load parquet file: {file_path}")
-                return False, file_path
-
-        elif load_button and file_path:
-            st.error(f"File not found: {file_path}")
-            return False, file_path
-        elif load_button:
-            st.error("Please provide a file path")
-            return False, None
-
-    return False, file_path
+    return (loaded_path is not None, loaded_path)
 
 
 def render_dynamic_filters() -> Dict[str, Any]:
