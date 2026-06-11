@@ -148,6 +148,12 @@ def get_cascading_options(
         return column_info.get(target_column, {}).get('unique_values', []) or []
 
 
+# Root of the curated demo data. On the Hugging Face Space the `netzhang/demo`
+# dataset is mounted read-only at /data, so paths resolve to
+# /data/demo_subset/<dataset>/bioclip-2_float16/emb_*.parquet. Override via
+# EMB_EXPLORER_DEMO_DATA_ROOT for local development.
+DEMO_DATA_ROOT = os.environ.get("EMB_EXPLORER_DEMO_DATA_ROOT", "/data")
+
 # Curated demo datasets shown as clickable cards on the precalculated app's
 # landing area. Each entry is rendered as a colored card; clicking "Load"
 # triggers _load_parquet_path() with the configured path.
@@ -161,9 +167,9 @@ DEMO_DATASETS = [
             "677 images of 17 finch species from the Galápagos adaptive "
             "radiation. BioCLIP 2 embeddings, 768-d."
         ),
-        "path": (
-            "/fs/scratch/PAS2136/TreeOfLife/analytics/Darwins_Finches/"
-            "embeddings/model=BioCLIP_2"
+        "path": os.path.join(
+            DEMO_DATA_ROOT,
+            "demo_subset/darwins_finches/bioclip-2_float16/emb_darwin_finches.parquet",
         ),
         "enabled": True,
     },
@@ -176,7 +182,10 @@ DEMO_DATASETS = [
             "960 images across 8 Canis species, stratified by image type. "
             "BioCLIP 2 embeddings, 768-d."
         ),
-        "path": "/fs/scratch/PAS2136/TreeOfLife/analytics/wolf_sample/wolf_sample.parquet",
+        "path": os.path.join(
+            DEMO_DATA_ROOT,
+            "demo_subset/wolf_sample/bioclip-2_float16/emb_wolf_sample.parquet",
+        ),
         "enabled": True,
     },
 ]
