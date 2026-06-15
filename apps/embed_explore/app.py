@@ -7,11 +7,6 @@ cluster them, and explore the results visually.
 
 import streamlit as st
 
-from apps.embed_explore.components.sidebar import render_clustering_sidebar
-from apps.embed_explore.components.image_preview import render_image_preview
-from shared.components.summary import render_clustering_summary
-from shared.components.visualization import render_scatter_plot
-
 
 def main():
     """CLI entry point — launches the Streamlit server."""
@@ -25,6 +20,11 @@ def main():
 
 def app():
     """Streamlit application layout."""
+    from apps.embed_explore.components.sidebar import render_clustering_sidebar
+    from apps.embed_explore.components.image_preview import render_image_preview
+    from shared.components.summary import render_clustering_summary
+    from shared.components.visualization import render_scatter_plot
+
     st.set_page_config(
         layout="wide",
         page_title="Embed & Explore",
