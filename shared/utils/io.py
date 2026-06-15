@@ -1,22 +1,37 @@
 import os
 import shutil
 
-def list_image_files(image_dir, allowed_extensions=('jpg', 'jpeg', 'png')):
+# Image extensions we attempt to load (PIL-decodable raster formats).
+IMAGE_EXTENSIONS = ('.jpg', '.jpeg', '.png', '.bmp', '.tif', '.tiff', '.webp')
+
+
+def list_image_files(image_dir, allowed_extensions=IMAGE_EXTENSIONS, recursive=False):
     """
     List image file paths in a directory with allowed extensions.
 
     Args:
         image_dir (str): Path to the directory containing images.
-        allowed_extensions (tuple, optional): Allowed file extensions. Defaults to ('jpg', 'jpeg', 'png').
+        allowed_extensions (tuple, optional): Allowed file extensions (lowercase,
+            leading dot). Defaults to IMAGE_EXTENSIONS.
+        recursive (bool, optional): Recurse into subdirectories. Defaults to False.
 
     Returns:
-        list: List of full file paths for images with allowed extensions.
+        list: Sorted list of full file paths for images with allowed extensions.
     """
-    return [
-        os.path.join(image_dir, f)
-        for f in os.listdir(image_dir)
-        if f.lower().endswith(allowed_extensions)
-    ]
+    if recursive:
+        paths = [
+            os.path.join(root, f)
+            for root, _, files in os.walk(image_dir)
+            for f in files
+            if f.lower().endswith(allowed_extensions)
+        ]
+    else:
+        paths = [
+            os.path.join(image_dir, f)
+            for f in os.listdir(image_dir)
+            if f.lower().endswith(allowed_extensions)
+        ]
+    return sorted(paths)
     
 def copy_image(row, repartition_dir):
     """
