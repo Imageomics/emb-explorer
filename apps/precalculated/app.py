@@ -7,19 +7,6 @@ Features dynamic filter generation based on available columns.
 
 import streamlit as st
 
-from apps.precalculated.components.sidebar import (
-    render_file_section,
-    render_dynamic_filters,
-    render_projection_section,
-    render_kmeans_section,
-)
-from apps.precalculated.components.data_preview import (
-    render_data_preview,
-    render_cluster_representatives,
-)
-from shared.components.visualization import render_scatter_plot
-from shared.components.summary import render_clustering_summary
-
 
 def main():
     """CLI entry point — launches the Streamlit server."""
@@ -33,6 +20,19 @@ def main():
 
 def app():
     """Streamlit application layout."""
+    from apps.precalculated.components.sidebar import (
+        render_file_section,
+        render_dynamic_filters,
+        render_projection_section,
+        render_kmeans_section,
+    )
+    from apps.precalculated.components.data_preview import (
+        render_data_preview,
+        render_cluster_representatives,
+    )
+    from shared.components.visualization import render_scatter_plot
+    from shared.components.summary import render_clustering_summary
+
     st.set_page_config(
         layout="wide",
         page_title="Precalculated Embeddings Explorer",
