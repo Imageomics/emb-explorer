@@ -8,16 +8,27 @@ import numpy as np
 
 from shared.utils.logging_config import get_logger
 from shared.utils.backend import (
-    HAS_FAISS_PACKAGE, HAS_CUML_PACKAGE, HAS_CUPY_PACKAGE,
-    check_cuda_available, check_cuml_available, check_faiss_available,
+    HAS_CUML_PACKAGE, HAS_CUPY_PACKAGE,
+    check_cuda_available, check_cuml_available,
 )
 
 logger = get_logger(__name__)
 
+# Auto-enable scikit-learn-intelex (Intel oneDAL) acceleration for sklearn's
+# PCA / TSNE / KMeans on CPU. Patches sklearn at import time so any downstream
+# sklearn call gets the accelerated path transparently. Disable for debugging
+# vanilla sklearn behavior with: EMB_EXPLORER_DISABLE_SKLEARNEX=1
+if os.environ.get("EMB_EXPLORER_DISABLE_SKLEARNEX", "0") != "1":
+    try:
+        from sklearnex import patch_sklearn
+        patch_sklearn()
+        logger.info("scikit-learn-intelex enabled (CPU sklearn auto-accelerated)")
+    except ImportError:
+        logger.debug("scikit-learn-intelex not installed; using vanilla sklearn")
+
 # Legacy module-level flags — now backed by lightweight find_spec() checks
 # so importing this module no longer triggers heavy library loads.
 # Functions that actually need the libraries import them locally.
-HAS_FAISS: bool = HAS_FAISS_PACKAGE
 HAS_CUML: bool = HAS_CUML_PACKAGE and HAS_CUPY_PACKAGE
 HAS_CUDA: bool = False  # resolved lazily via check_cuda_available()
 
@@ -342,8 +353,8 @@ def run_kmeans(embeddings: np.ndarray, n_clusters: int, seed: Optional[int] = No
         embeddings (np.ndarray): The input feature embeddings of shape (n_samples, n_features).
         n_clusters (int): The number of clusters to form.
         seed (int, optional): Random seed for reproducibility. Defaults to None (random).
-        n_workers (int, optional): Number of parallel workers (used by FAISS and cuML if available).
-        backend (str, optional): Clustering backend - "auto", "sklearn", "faiss", or "cuml". Defaults to "auto".
+        n_workers (int, optional): Number of parallel workers (used by cuML if available).
+        backend (str, optional): Clustering backend - "auto", "sklearn", or "cuml". Defaults to "auto".
 
     Returns:
         kmeans (KMeans or custom object): The fitted clustering object.
@@ -362,20 +373,9 @@ def run_kmeans(embeddings: np.ndarray, n_clusters: int, seed: Optional[int] = No
     if backend == "cuml" and HAS_CUML and cuda_available:
         logger.info("Using cuML backend for KMeans")
         result = _run_kmeans_cuml(embeddings, n_clusters, seed, n_workers)
-    elif backend == "faiss" and HAS_FAISS:
-        logger.info("Using FAISS backend for KMeans")
-        result = _run_kmeans_faiss(embeddings, n_clusters, seed, n_workers)
-    elif backend == "auto":
-        # Auto selection priority: cuML > FAISS > sklearn
-        if HAS_CUML and cuda_available and n_samples > 500:
-            logger.info("Auto-selected cuML backend for KMeans (GPU available, large dataset)")
-            result = _run_kmeans_cuml(embeddings, n_clusters, seed, n_workers)
-        elif HAS_FAISS and n_samples > 500:
-            logger.info("Auto-selected FAISS backend for KMeans (large dataset)")
-            result = _run_kmeans_faiss(embeddings, n_clusters, seed, n_workers)
-        else:
-            logger.info("Using sklearn backend for KMeans")
-            result = _run_kmeans_sklearn(embeddings, n_clusters, seed)
+    elif backend == "auto" and HAS_CUML and cuda_available and n_samples > 500:
+        logger.info("Auto-selected cuML backend for KMeans (GPU available, large dataset)")
+        result = _run_kmeans_cuml(embeddings, n_clusters, seed, n_workers)
     else:
         logger.info("Using sklearn backend for KMeans")
         result = _run_kmeans_sklearn(embeddings, n_clusters, seed)
@@ -442,56 +442,5 @@ def _run_kmeans_sklearn(embeddings: np.ndarray, n_clusters: int, seed: Optional[
     labels = kmeans.fit_predict(embeddings)
     return kmeans, labels
 
-
-def _run_kmeans_faiss(embeddings: np.ndarray, n_clusters: int, seed: Optional[int] = None, n_workers: int = 1):
-    """KMeans using FAISS backend for faster clustering."""
-    try:
-        import faiss
-        
-        # Ensure embeddings are float32 and C-contiguous (FAISS requirement)
-        embeddings = np.ascontiguousarray(embeddings.astype(np.float32))
-        
-        n_samples, d = embeddings.shape
-        
-        # Set number of threads for FAISS
-        if n_workers > 1:
-            faiss.omp_set_num_threads(n_workers)
-        
-        # Create FAISS KMeans object
-        kmeans = faiss.Clustering(d, n_clusters)
-        
-        # Set clustering parameters
-        kmeans.verbose = False
-        kmeans.niter = 20  # Number of iterations
-        kmeans.nredo = 1   # Number of redos
-        if seed is not None:
-            kmeans.seed = seed
-        
-        # Use L2 distance (equivalent to sklearn's default)
-        index = faiss.IndexFlatL2(d)
-        
-        # Run clustering
-        kmeans.train(embeddings, index)
-        
-        # Get centroids
-        centroids = faiss.vector_to_array(kmeans.centroids).reshape(n_clusters, d)
-        
-        # Assign labels by finding nearest centroid for each point
-        _, labels = index.search(embeddings, 1)
-        labels = labels.flatten()
-        
-        # Create a simple object to mimic sklearn KMeans interface
-        class FAISSKMeans:
-            def __init__(self, centroids, labels):
-                self.cluster_centers_ = centroids
-                self.labels_ = labels
-                self.n_clusters = len(centroids)
-        
-        return FAISSKMeans(centroids, labels), labels
-        
-    except Exception as e:
-        # Fallback to sklearn if FAISS fails
-        logger.warning(f"FAISS clustering failed ({e}), falling back to sklearn")
-        return _run_kmeans_sklearn(embeddings, n_clusters, seed)
 
 
