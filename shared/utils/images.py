@@ -60,7 +60,7 @@ IMAGE_URL_COLUMNS = ['identifier', 'image_url', 'url', 'img_url', 'image']
 # contact us / allowlist us if needed.
 USER_AGENT = (
     f"emb-explorer/{_EMB_EXPLORER_VERSION} "
-    "(https://github.com/Imageomics/emb-explorer)"
+    "(+https://github.com/Imageomics/emb-explorer)"
 )
 
 _session: Optional[requests.Session] = None
