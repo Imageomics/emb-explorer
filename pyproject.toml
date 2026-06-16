@@ -98,12 +98,6 @@ emb-embed-explore = "apps.embed_explore.app:main"
 emb-precalculated = "apps.precalculated.app:main"
 list-models = "shared.utils.models:print_available_models"
 
-[tool.hatch.version]
-path = "shared/__init__.py"
-
-[tool.hatch.metadata]
-allow-direct-references = true
-
 [tool.hatch.build.targets.wheel]
 packages = ["shared", "apps"]
 
