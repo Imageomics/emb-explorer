@@ -6,78 +6,19 @@ Dynamically displays all available metadata fields.
 import streamlit as st
 import pandas as pd
 import numpy as np
-import requests
-import time
-from typing import Optional
-from PIL import Image
-from io import BytesIO
 
 from shared.utils.logging_config import get_logger
+from shared.utils.representatives import find_cluster_representatives
+from shared.utils.images import (
+    IMAGE_URL_COLUMNS,
+    fetch_images_concurrent,
+    get_image_from_url,
+    resolve_record_image_url,
+    _IMAGE_CACHE,
+)
+from shared.components.representatives import render_representative_images
 
 logger = get_logger(__name__)
-
-
-@st.cache_data(ttl=300, show_spinner=False)
-def _fetch_image_from_url_cached(url: str, timeout: int = 5) -> Optional[bytes]:
-    """Internal cached function to fetch image bytes."""
-    if not url or not isinstance(url, str):
-        return None
-
-    try:
-        if not url.startswith(('http://', 'https://')):
-            return None
-
-        response = requests.get(url, timeout=timeout, stream=True)
-        response.raise_for_status()
-
-        content_type = response.headers.get('content-type', '').lower()
-        if not content_type.startswith('image/'):
-            return None
-
-        return response.content
-
-    except Exception:
-        return None
-
-
-def fetch_image_from_url(url: str, timeout: int = 5) -> Optional[bytes]:
-    """
-    Fetch an image from a URL with logging.
-    Uses caching internally but logs the request.
-    """
-    if not url or not isinstance(url, str):
-        return None
-
-    if not url.startswith(('http://', 'https://')):
-        logger.warning(f"[Image] Invalid URL scheme: {url[:50]}...")
-        return None
-
-    logger.info(f"[Image] Fetching: {url[:80]}...")
-    start_time = time.time()
-
-    result = _fetch_image_from_url_cached(url, timeout)
-
-    elapsed = time.time() - start_time
-    if result:
-        logger.info(f"[Image] Loaded: {len(result)/1024:.1f}KB in {elapsed:.3f}s")
-    else:
-        logger.warning(f"[Image] Failed to load: {url[:50]}...")
-
-    return result
-
-
-def get_image_from_url(url: str) -> Optional[Image.Image]:
-    """Get image from URL with caching and logging."""
-    image_bytes = fetch_image_from_url(url)
-    if image_bytes:
-        try:
-            image = Image.open(BytesIO(image_bytes))
-            logger.info(f"[Image] Opened: {image.size[0]}x{image.size[1]} {image.mode}")
-            return image
-        except Exception as e:
-            logger.error(f"[Image] Failed to open: {e}")
-            return None
-    return None
 
 
 def render_data_preview():
@@ -110,15 +51,12 @@ def render_data_preview():
 
         st.markdown("### Record Details")
 
-        # Try to display image if identifier/url column exists (cached to prevent re-fetch)
-        image_cols = ['identifier', 'image_url', 'url', 'img_url', 'image']
-        for img_col in image_cols:
-            if img_col in record.index and pd.notna(record[img_col]):
-                url = record[img_col]
-                image = get_image_from_url(url)
-                if image is not None:
-                    st.image(image, width=280)
-                    break
+        # Try to display image if an image URL column exists (process-cached).
+        url = resolve_record_image_url(record)
+        if url:
+            image = get_image_from_url(url)
+            if image is not None:
+                st.image(image, width=280)
 
         st.markdown(f"**UUID:** `{selected_uuid}`")
 
@@ -276,3 +214,85 @@ def render_cluster_analysis():
         st.code(tree_output, language="text")
     else:
         st.info(f"No valid '{color_by}' values to compare with KMeans clusters.")
+
+
+def render_cluster_representatives():
+    """Render representative images per KMeans cluster for the precalculated app.
+
+    Representatives are the members closest to each cluster centroid (computed
+    on the full-dimensional embeddings). Images are fetched from each record's
+    URL column; URLs that fail to load are skipped and the next-closest
+    candidate is tried (fallback), so transient/broken URLs don't leave gaps.
+    """
+    df_plot = st.session_state.get("data", None)
+    embeddings = st.session_state.get("embeddings", None)
+    if df_plot is None or embeddings is None:
+        return
+
+    kmeans_cols = sorted(
+        [c for c in df_plot.columns if c.startswith("KMeans (k=")],
+        key=lambda c: int(c.split("=")[1].rstrip(")")),
+    )
+    if not kmeans_cols:
+        return  # nothing to show until a KMeans run exists
+
+    st.markdown("### Representative Images")
+    st.caption(
+        "Members closest to each cluster centroid. Images load from each "
+        "record's URL; unreachable images are skipped automatically."
+    )
+
+    selected_col = st.selectbox(
+        "KMeans result",
+        options=kmeans_cols,
+        index=len(kmeans_cols) - 1,
+        key="representatives_kmeans_selector",
+        help="Which KMeans run to show representatives for.",
+    )
+
+    # Guard: embeddings must align row-for-row with df_plot.
+    if len(embeddings) != len(df_plot):
+        st.info("Re-run projection and KMeans to view representatives.")
+        return
+
+    n_per_cluster = 3
+    representatives = find_cluster_representatives(
+        embeddings, df_plot[selected_col].values, n_per_cluster=n_per_cluster
+    )
+
+    # Warm the cache concurrently. Representatives are oversampled for fallback,
+    # but we only need a few successes per cluster — prefetch a prefix (2x the
+    # display count) in parallel. Deeper fallback candidates (rare) resolve
+    # on-demand below.
+    prefetch_per_cluster = n_per_cluster * 2
+    prefetch_urls = [
+        resolve_record_image_url(df_plot.iloc[idx])
+        for idxs in representatives.values()
+        for idx in idxs[:prefetch_per_cluster]
+    ]
+    with st.spinner("Loading representative images..."):
+        fetch_images_concurrent([u for u in prefetch_urls if u])
+
+    def _resolve(idx):
+        url = resolve_record_image_url(df_plot.iloc[idx])
+        if not url:
+            return None
+        # Prefetched URLs hit the process cache; anything deeper falls back to
+        # a single synchronous fetch (also cached).
+        if url in _IMAGE_CACHE:
+            return _IMAGE_CACHE[url]
+        return get_image_from_url(url)
+
+    def _caption(idx):
+        row = df_plot.iloc[idx]
+        for col in ("scientific_name", "species", "common_name", "uuid"):
+            if col in row.index and pd.notna(row[col]):
+                return str(row[col])
+        return None
+
+    render_representative_images(
+        representatives,
+        resolve_image=_resolve,
+        n_per_cluster=n_per_cluster,
+        caption_fn=_caption,
+    )

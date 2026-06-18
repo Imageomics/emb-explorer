@@ -6,6 +6,7 @@ import streamlit as st
 import os
 import pandas as pd
 from shared.utils.taxonomy_tree import build_taxonomic_tree, format_tree_string, get_tree_statistics
+from shared.components.representatives import render_representative_images
 from shared.utils.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -197,18 +198,24 @@ def render_clustering_summary(show_taxonomy=False):
         st.dataframe(summary_df, hide_index=True, width='stretch')
 
         st.markdown("#### Representative Images")
-        for row in summary_df.itertuples():
-            k = row.Cluster
-            st.markdown(f"**Cluster {k}**")
-            img_cols = st.columns(3)
-            for i, img_idx in enumerate(representatives[k]):
-                img_path = df_plot.iloc[img_idx]["image_path"]
-                logger.debug(f"Displaying representative image: {img_path}")
-                img_cols[i].image(
-                    img_path,
-                    width='stretch',
-                    caption=os.path.basename(img_path),
-                )
+
+        def _resolve_local_image(idx):
+            """Return the local image path if it exists, else None (fallback)."""
+            path = df_plot.iloc[idx]["image_path"]
+            if isinstance(path, str) and os.path.exists(path):
+                return path
+            return None
+
+        def _local_caption(idx):
+            path = df_plot.iloc[idx]["image_path"]
+            return os.path.basename(path) if isinstance(path, str) else None
+
+        render_representative_images(
+            representatives,
+            resolve_image=_resolve_local_image,
+            n_per_cluster=3,
+            caption_fn=_local_caption,
+        )
     else:
         # Precalculated app: show taxonomy tree (works with or without KMeans)
         if show_taxonomy:

@@ -37,6 +37,7 @@ dependencies = [
     "pandas>=2.0.0",
     "pillow>=9.0.0",
     "pyarrow>=10.0.0",
+    "requests>=2.28.0",
     # Visualization
     "altair>=5.0.0",
     # Machine learning
@@ -96,12 +97,6 @@ Issues = "https://github.com/Imageomics/emb-explorer/issues"
 emb-embed-explore = "apps.embed_explore.app:main"
 emb-precalculated = "apps.precalculated.app:main"
 list-models = "shared.utils.models:print_available_models"
-
-[tool.hatch.version]
-path = "shared/__init__.py"
-
-[tool.hatch.metadata]
-allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["shared", "apps"]
