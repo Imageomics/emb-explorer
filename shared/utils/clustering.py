@@ -250,10 +250,13 @@ def _reduce_dim_cuml(embeddings: np.ndarray, method: str, seed: Optional[int], n
             n_samples = embeddings.shape[0]
             perplexity = min(30, max(5, n_samples // 3))
 
+            # Force the exact solver: cuML's default Barnes-Hut collapses to a
+            # ~1D line on near-homogeneous data (#40). exact is O(N^2) but fine
+            # at our interactive scale; a faster Barnes-Hut-with-guard can come later.
             if seed is not None:
-                reducer = cuTSNE(n_components=2, perplexity=perplexity, random_state=seed)
+                reducer = cuTSNE(n_components=2, perplexity=perplexity, method="exact", random_state=seed)
             else:
-                reducer = cuTSNE(n_components=2, perplexity=perplexity)
+                reducer = cuTSNE(n_components=2, perplexity=perplexity, method="exact")
         else:
             raise ValueError("Unsupported method. Choose 'PCA', 'TSNE', or 'UMAP'.")
 
