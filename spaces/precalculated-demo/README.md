@@ -34,20 +34,20 @@ finches or wolves), project it to 2D, color by metadata, and cluster.
 
 - The app code (`apps/` + `shared/`) is deployed manually from the
   `feature/hf-space-precalculated-demo` branch of
-  [emb-explorer](https://github.com/Imageomics/emb-explorer) — no GitHub
-  clone or CI sync. The Dockerfile builds straight from the pushed files.
+  [emb-explorer](https://github.com/Imageomics/emb-explorer). The Dockerfile
+  builds straight from the pushed files.
 - Dependencies are a precalc-only subset (`requirements-space.txt`); the
   embedding-generation stack (torch / open-clip) is intentionally excluded.
-- The curated demo data lives in the [`netzhang/demo`](https://huggingface.co/datasets/netzhang/demo)
-  dataset, **mounted read-only at `/data`** via a Space volume. Files are
-  fetched lazily, so the full TreeOfLife-200M embeddings can be mounted
-  without consuming disk.
+- The curated demo data lives in the [`imageomics/TreeOfLife-200M-Embeddings`](https://huggingface.co/datasets/imageomics/TreeOfLife-200M-Embeddings)
+  dataset (under `demo_subset/`), **mounted read-only at `/data`** via a Space
+  volume. Files are fetched lazily, so the full TreeOfLife-200M embeddings can
+  be mounted without consuming disk.
 
 ## Volume mount (one-time setup, out of band)
 
 ```bash
 hf spaces volumes set netzhang/emb-explorer-demo \
-  -v hf://datasets/netzhang/demo:/data
+  -v hf://datasets/imageomics/TreeOfLife-200M-Embeddings:/data
 ```
 
 The app reads `/data/demo_subset/<dataset>/bioclip-2_float16/emb_*.parquet`
