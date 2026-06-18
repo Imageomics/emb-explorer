@@ -199,7 +199,9 @@ def _reduce_dim_sklearn(embeddings: np.ndarray, method: str, seed: Optional[int]
     effective_workers = -1 if n_workers > 1 else n_workers
 
     if method.upper() == "PCA":
-        reducer = PCA(n_components=2)
+        # Pass random_state so the randomized SVD solver (auto-selected for
+        # large inputs) is reproducible when a seed is set; None keeps it random.
+        reducer = PCA(n_components=2, random_state=seed)
     elif method.upper() == "TSNE":
         # Adjust perplexity to be valid for the sample size
         n_samples = embeddings.shape[0]
@@ -244,6 +246,8 @@ def _reduce_dim_cuml(embeddings: np.ndarray, method: str, seed: Optional[int], n
 
         if method.upper() == "PCA":
             from cuml.decomposition import PCA as cuPCA
+            # cuML PCA takes no random_state and needs none: its full-SVD solver
+            # is deterministic, so results are already reproducible run-to-run.
             reducer = cuPCA(n_components=2)
         elif method.upper() == "TSNE":
             from cuml.manifold import TSNE as cuTSNE
