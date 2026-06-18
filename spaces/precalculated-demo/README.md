@@ -7,6 +7,21 @@ sdk: docker
 app_port: 7860
 pinned: false
 license: mit
+short_description: Filter, project, and cluster preccalculated BioCLIP 2 embeddings
+tags:
+  - biodiversity
+  - embeddings
+  - bioclip
+  - clustering
+  - dimensionality-reduction
+  - umap
+  - tsne
+  - visualization
+  - imageomics
+datasets:
+  - imageomics/TreeOfLife-200M-Embeddings
+models:
+  - imageomics/bioclip-2
 ---
 
 # Image Embedding Explorer — Precalculated Demo

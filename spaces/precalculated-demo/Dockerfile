@@ -23,8 +23,10 @@ RUN pip install --no-cache-dir -r requirements-space.txt
 # App source (apps/ and shared/ are pushed to the Space repo alongside this file).
 COPY --chown=user . $HOME/app
 
-# Demo data is mounted at /data (see README).
-ENV EMB_EXPLORER_DEMO_DATA_ROOT=/data
+# Demo data is mounted at /data (see README); EMB_EXPLORER_DEMO=1 turns on the
+# hosted-demo chrome (header/footer) so it stays dormant in normal local use.
+ENV EMB_EXPLORER_DEMO_DATA_ROOT=/data \
+    EMB_EXPLORER_DEMO=1
 
 EXPOSE 7860
 CMD ["streamlit", "run", "apps/precalculated/app.py", \

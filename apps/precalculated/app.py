@@ -16,6 +16,11 @@ from apps.precalculated.components.sidebar import (
 from apps.precalculated.components.data_preview import render_data_preview
 from shared.components.visualization import render_scatter_plot
 from shared.components.summary import render_clustering_summary
+from shared.components.demo_chrome import (
+    is_demo_mode,
+    render_demo_header,
+    render_demo_footer,
+)
 
 
 def main():
@@ -45,12 +50,15 @@ def app():
                 del st.session_state[key]
         st.session_state.page_type = "precalculated_app"
 
-    # Header
-    st.title("📊 Precalculated Embeddings Explorer")
-    st.markdown(
-        "Load parquet files with embeddings, apply dynamic filters, and cluster for visualization. "
-        "Filters are automatically generated based on your data columns."
-    )
+    # Header — demo chrome when hosted, otherwise the standard title.
+    if is_demo_mode():
+        render_demo_header()
+    else:
+        st.title("📊 Precalculated Embeddings Explorer")
+        st.markdown(
+            "Load parquet files with embeddings, apply dynamic filters, and cluster for visualization. "
+            "Filters are automatically generated based on your data columns."
+        )
 
     # Row 1: File loading
     render_file_section()
@@ -74,6 +82,10 @@ def app():
     # Bottom: Taxonomy summary
     st.markdown("---")
     render_clustering_summary(show_taxonomy=True)
+
+    # Demo-only attribution / funding footer.
+    if is_demo_mode():
+        render_demo_footer()
 
 
 if __name__ == "__main__":
