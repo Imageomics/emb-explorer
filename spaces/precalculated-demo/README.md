@@ -7,7 +7,7 @@ sdk: docker
 app_port: 7860
 pinned: false
 license: mit
-short_description: Filter, project, and cluster precalculated BioCLIP 2 embeddings
+short_description: Filter, project, and cluster precalculated image embeddings
 tags:
   - biodiversity
   - embeddings
