@@ -99,9 +99,8 @@ def resolve_backend(backend: str, operation: str = "general") -> str:
         return backend
 
     cuda_available, device_info = check_cuda_available()
-    has_cuml = check_cuml_available()
-
-    if cuda_available and has_cuml:
+    # Only probe for cuML when CUDA is actually available.
+    if cuda_available and check_cuml_available():
         resolved = "cuml"
         logger.info(f"Auto-resolved {operation} backend to cuML (GPU: {device_info})")
     else:

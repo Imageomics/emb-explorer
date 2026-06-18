@@ -4,9 +4,11 @@ def list_available_models():
     # Create list of all models
     models_data = []
     
-    # Add special models first
+    # Add special models first (Imageomics BioCLIP family)
     models_data.extend([
         {"name": "hf-hub:imageomics/bioclip-2", "pretrained": None},
+        {"name": "hf-hub:imageomics/bioclip-2.5-vith14", "pretrained": None},
+        {"name": "hf-hub:imageomics/biocap", "pretrained": None},
         {"name": "hf-hub:imageomics/bioclip", "pretrained": None}
     ])
     

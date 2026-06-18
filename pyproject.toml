@@ -48,8 +48,8 @@ dependencies = [
     "numba>=0.57.0",
     # Vision-language models
     "open-clip-torch>=2.20.0",
-    # Custom inference package
-    "hpc-inference @ git+https://github.com/Imageomics/hpc-inference.git"
+    # Image embedding pipeline (used directly in shared/utils/image_pipeline.py)
+    "torch>=1.11.0",
 ]
 
 [project.optional-dependencies]
