@@ -36,11 +36,13 @@ Why a process-level cache (not ``@st.cache_data``)
   Trimming only happens at the end of a fetch call, not on every insertion.
 - ``None`` is cached as a known miss, so a dead URL is fetched at most once.
 
-The single shared ``requests.Session`` carries the project User-Agent so data
-hosts can identify / allowlist us.
+Each worker thread gets its own ``requests.Session`` (``requests.Session`` is
+not thread-safe); every session carries the project User-Agent so data hosts
+can identify / allowlist us.
 """
 
 import concurrent.futures
+import threading
 import time
 from io import BytesIO
 from typing import Dict, Iterable, Optional
@@ -63,17 +65,19 @@ USER_AGENT = (
     "(+https://github.com/Imageomics/emb-explorer)"
 )
 
-_session: Optional[requests.Session] = None
+# requests.Session is not thread-safe, and fetch_images_concurrent calls
+# download_image_bytes from a thread pool — so keep one session per thread.
+_thread_local = threading.local()
 
 
 def _get_session() -> requests.Session:
-    """Lazily build a shared requests.Session carrying our User-Agent."""
-    global _session
-    if _session is None:
-        s = requests.Session()
-        s.headers.update({"User-Agent": USER_AGENT})
-        _session = s
-    return _session
+    """Lazily build a per-thread requests.Session carrying our User-Agent."""
+    session = getattr(_thread_local, "session", None)
+    if session is None:
+        session = requests.Session()
+        session.headers.update({"User-Agent": USER_AGENT})
+        _thread_local.session = session
+    return session
 
 
 def download_image_bytes(url: str, timeout: int = 5) -> Optional[bytes]:
