@@ -84,11 +84,11 @@ def download_image_bytes(url: str, timeout: int = 5) -> Optional[bytes]:
     if not isinstance(url, str) or not url.startswith(('http://', 'https://')):
         return None
     try:
-        resp = _get_session().get(url, timeout=timeout, stream=True)
-        resp.raise_for_status()
-        if not resp.headers.get('content-type', '').lower().startswith('image/'):
-            return None
-        return resp.content
+        with _get_session().get(url, timeout=timeout, stream=True) as resp:
+            resp.raise_for_status()
+            if not resp.headers.get('content-type', '').lower().startswith('image/'):
+                return None
+            return resp.content
     except Exception:
         return None
 

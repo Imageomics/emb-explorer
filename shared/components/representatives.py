@@ -33,7 +33,7 @@ def render_representative_images(
     representatives: Dict[object, List[int]],
     resolve_image: Callable[[int], Optional[Any]],
     n_per_cluster: int = 3,
-    caption_fn: Optional[Callable[[int], str]] = None,
+    caption_fn: Optional[Callable[[int], Optional[str]]] = None,
     columns: int = 3,
 ) -> None:
     """Render up to `n_per_cluster` representative images per cluster.
@@ -45,7 +45,7 @@ def render_representative_images(
             None means "unavailable" and the renderer falls back to the next
             candidate.
         n_per_cluster: number of images to show per cluster.
-        caption_fn: optional idx -> caption string.
+        caption_fn: optional idx -> caption string, or None for no caption.
         columns: images per row.
     """
     for cluster_id in _sorted_cluster_ids(representatives):

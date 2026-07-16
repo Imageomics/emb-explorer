@@ -14,7 +14,6 @@ from shared.utils.images import (
     fetch_images_concurrent,
     get_image_from_url,
     resolve_record_image_url,
-    _IMAGE_CACHE,
 )
 from shared.components.representatives import render_representative_images
 
@@ -277,10 +276,8 @@ def render_cluster_representatives():
         url = resolve_record_image_url(df_plot.iloc[idx])
         if not url:
             return None
-        # Prefetched URLs hit the process cache; anything deeper falls back to
-        # a single synchronous fetch (also cached).
-        if url in _IMAGE_CACHE:
-            return _IMAGE_CACHE[url]
+        # Prefetched URLs hit the process cache inside get_image_from_url;
+        # anything deeper falls back to a single synchronous fetch (also cached).
         return get_image_from_url(url)
 
     def _caption(idx):
