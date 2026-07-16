@@ -186,7 +186,7 @@ class ClusteringService:
         df_plot: pd.DataFrame
     ) -> Tuple[pd.DataFrame, Dict[int, List[int]]]:
         """
-        Generate clustering summary statistics and representative images.
+        Generate clustering summary statistics and representative candidates.
 
         Args:
             embeddings: Original embeddings
@@ -194,7 +194,11 @@ class ClusteringService:
             df_plot: Clustering dataframe
 
         Returns:
-            Tuple of (summary dataframe, representatives dict)
+            Tuple of (summary dataframe, representatives dict). The dict maps
+            each cluster label to a ranked candidate list (closest-to-centroid
+            first), oversampled beyond the display count so renderers can skip
+            entries whose image fails to load — see
+            `find_cluster_representatives`. Renderers cap how many they show.
         """
         from shared.utils.representatives import find_cluster_representatives
 
