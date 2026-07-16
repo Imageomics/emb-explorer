@@ -10,9 +10,8 @@ import numpy as np
 from shared.utils.logging_config import get_logger
 from shared.utils.representatives import find_cluster_representatives
 from shared.utils.images import (
-    IMAGE_URL_COLUMNS,
     fetch_images_concurrent,
-    get_image_from_url,
+    get_record_image,
     resolve_record_image_url,
 )
 from shared.components.representatives import render_representative_images
@@ -50,12 +49,11 @@ def render_data_preview():
 
         st.markdown("### Record Details")
 
-        # Try to display image if an image URL column exists (process-cached).
-        url = resolve_record_image_url(record)
-        if url:
-            image = get_image_from_url(url)
-            if image is not None:
-                st.image(image, width=280)
+        # Try to display an image, falling back across the record's URL
+        # columns until one loads (process-cached).
+        image = get_record_image(record)
+        if image is not None:
+            st.image(image, width=280)
 
         st.markdown(f"**UUID:** `{selected_uuid}`")
 
@@ -261,8 +259,8 @@ def render_cluster_representatives():
 
     # Warm the cache concurrently. Representatives are oversampled for fallback,
     # but we only need a few successes per cluster — prefetch a prefix (2x the
-    # display count) in parallel. Deeper fallback candidates (rare) resolve
-    # on-demand below.
+    # display count, first URL per record) in parallel. Deeper fallbacks (later
+    # candidates, or a record's alternate URL columns) resolve on-demand below.
     prefetch_per_cluster = n_per_cluster * 2
     prefetch_urls = [
         resolve_record_image_url(df_plot.iloc[idx])
@@ -273,12 +271,10 @@ def render_cluster_representatives():
         fetch_images_concurrent([u for u in prefetch_urls if u])
 
     def _resolve(idx):
-        url = resolve_record_image_url(df_plot.iloc[idx])
-        if not url:
-            return None
-        # Prefetched URLs hit the process cache inside get_image_from_url;
-        # anything deeper falls back to a single synchronous fetch (also cached).
-        return get_image_from_url(url)
+        # Prefetched URLs hit the process cache inside get_record_image; broken
+        # URLs fall back to the record's next URL column, and anything not
+        # prefetched falls back to a single synchronous fetch (also cached).
+        return get_record_image(df_plot.iloc[idx])
 
     def _caption(idx):
         row = df_plot.iloc[idx]

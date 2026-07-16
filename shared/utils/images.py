@@ -6,22 +6,24 @@ in any app (precalculated, a URL-based embed_explore, the demo Space, ...).
 
 In-app fetch flow
 -----------------
-A record (parquet row) holds an image URL in one of ``IMAGE_URL_COLUMNS``.
-Two call paths consume these:
+A record (parquet row) may hold image URLs in several of ``IMAGE_URL_COLUMNS``;
+``resolve_record_image_urls`` lists the candidates in column order and
+``get_record_image`` walks them until one actually loads (a URL can look valid
+but be broken/unreachable). Two call paths consume these:
 
 1. Cluster representatives (bulk, eager).
-   ``render_cluster_representatives`` resolves a URL per candidate with
-   ``resolve_record_image_url`` and warms the cache up front via
-   ``fetch_images_concurrent`` (thread pool, 8 workers). Each thread calls
-   ``download_image_bytes`` -> ``bytes_to_image`` and stores the PIL image
-   (or ``None`` on failure) in ``_IMAGE_CACHE``. The renderer then reads
-   results straight from the cache; broken URLs are skipped and the next
-   candidate is tried.
+   ``render_cluster_representatives`` warms the cache up front by feeding each
+   candidate's first URL to ``fetch_images_concurrent`` (thread pool, 8
+   workers). Each thread calls ``download_image_bytes`` -> ``bytes_to_image``
+   and stores the PIL image (or ``None`` on failure) in ``_IMAGE_CACHE``. The
+   renderer then resolves via ``get_record_image``; broken URLs fall back to
+   the record's next URL column, and records with no loadable image fall back
+   to the cluster's next candidate.
 
 2. Click preview (single, lazy).
-   ``render_data_preview`` resolves one URL and calls ``get_image_from_url``,
-   which serves the cached image if present and otherwise does a single
-   synchronous ``download_image_bytes`` -> ``bytes_to_image`` and caches it.
+   ``render_data_preview`` calls ``get_record_image``, which serves cached
+   images if present and otherwise does a single synchronous
+   ``download_image_bytes`` -> ``bytes_to_image`` per URL and caches it.
 
 So both paths share one fetch primitive and one cache; the only difference is
 concurrent prefetch vs. on-demand single fetch.
@@ -45,7 +47,7 @@ import concurrent.futures
 import threading
 import time
 from io import BytesIO
-from typing import Dict, Iterable, Optional
+from typing import Dict, Iterable, List, Optional
 
 import requests
 from PIL import Image
@@ -183,12 +185,14 @@ def get_image_from_url(url: str, timeout: int = 5) -> Optional[Image.Image]:
     return image
 
 
-def resolve_record_image_url(row) -> Optional[str]:
-    """Return the first valid HTTP(S) image URL from a record/row, else None.
+def resolve_record_image_urls(row) -> List[str]:
+    """Return all candidate HTTP(S) image URLs from a record/row, in
+    `IMAGE_URL_COLUMNS` order (deduplicated).
 
     `row` is anything supporting `col in row` membership and `row[col]`
     indexing (e.g. a pandas Series or a dict).
     """
+    urls: List[str] = []
     for col in IMAGE_URL_COLUMNS:
         try:
             present = col in row.index
@@ -196,6 +200,29 @@ def resolve_record_image_url(row) -> Optional[str]:
             present = col in row
         if present:
             val = row[col]
-            if isinstance(val, str) and val.startswith(('http://', 'https://')):
-                return val
+            if (
+                isinstance(val, str)
+                and val.startswith(('http://', 'https://'))
+                and val not in urls
+            ):
+                urls.append(val)
+    return urls
+
+
+def resolve_record_image_url(row) -> Optional[str]:
+    """Return the first candidate HTTP(S) image URL from a record/row, else None."""
+    urls = resolve_record_image_urls(row)
+    return urls[0] if urls else None
+
+
+def get_record_image(row, timeout: int = 5) -> Optional[Image.Image]:
+    """Fetch a record's image, falling back across candidate URL columns.
+
+    A URL that looks valid can still be broken/unreachable; walk the record's
+    candidate URLs (cached fetches) until one actually loads.
+    """
+    for url in resolve_record_image_urls(row):
+        image = get_image_from_url(url, timeout)
+        if image is not None:
+            return image
     return None
