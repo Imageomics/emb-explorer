@@ -57,6 +57,15 @@ uv pip install -e ".[gpu-cu13]"
 
 The app auto-detects GPU availability at runtime and falls back to CPU if anything goes wrong — no configuration needed. The CPU sklearn path is auto-accelerated by [scikit-learn-intelex](https://github.com/uxlfoundation/scikit-learn-intelex)[^1]. You can also manually select backends (`cuML`, `sklearn`) in the sidebar.
 
+### Reproducibility
+
+To get reproducible projections and clusters, enable **Use fixed seed** in the sidebar and pin the backend instead of `auto`: the GPU backend is `cuML`, the CPU backend is `sklearn` (auto-accelerated by `scikit-learn-intelex` on x86 CPUs). With a seed and a pinned backend, results are identical across app restarts on both backends, with one exception: cuML t-SNE, which never reproduces exactly.
+
+- **PCA** is a deterministic decomposition, with no stochastic optimization involved. cuML PCA uses a full eigendecomposition and always returns the same result, seed or no seed. sklearn can auto-select a randomized SVD solver, so the app passes the seed to make it reproducible.
+- **UMAP** and **KMeans** reproduce exactly on both backends when a seed is set. (Seeded UMAP trades some speed for determinism.)
+- **t-SNE** reproduces on `sklearn` when a seed is set. cuML's implementation is highly parallelized and documented as [not completely deterministic between runs, even with the same `random_state`](https://docs.rapids.ai/api/cuml/stable/api/generated/cuml.manifold.tsne/) (see [rapidsai/cuml#2980](https://github.com/rapidsai/cuml/issues/2980)). Select `sklearn` when t-SNE results need to be reproducible.
+- `auto` chooses a backend from data size and hardware, so the same seed can run different algorithms on different machines. Exact coordinates may also differ across library versions and hardware; a seed guarantees repeatability within one environment, not across environments.
+
 ## Usage
 
 ### Standalone Apps
