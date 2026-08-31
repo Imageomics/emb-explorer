@@ -10,6 +10,7 @@ import numpy as np
 from shared.utils.logging_config import get_logger
 from shared.utils.representatives import find_cluster_representatives
 from shared.utils.images import (
+    ImageTooLarge,
     fetch_images_concurrent,
     get_record_image,
     resolve_record_image_url,
@@ -50,9 +51,15 @@ def render_data_preview():
         st.markdown("### Record Details")
 
         # Try to display an image, falling back across the record's URL
-        # columns until one loads (process-cached).
+        # columns until one loads (process-cached). An over-cap image keeps
+        # its URL visible so the user can still open it in a browser.
         image = get_record_image(record)
-        if image is not None:
+        if isinstance(image, ImageTooLarge):
+            st.warning(
+                f"Image not downloaded — {image.describe()} exceeds the fetch limit."
+            )
+            st.markdown(f"[Open original image]({image.url})")
+        elif image is not None:
             st.image(image, width=280)
 
         st.markdown(f"**UUID:** `{selected_uuid}`")
