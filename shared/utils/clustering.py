@@ -4,6 +4,7 @@ import sys
 import subprocess
 import tempfile
 import time
+import uuid
 import numpy as np
 
 from shared.utils.logging_config import get_logger
@@ -315,9 +316,13 @@ def _run_cuml_umap_subprocess(embeddings: np.ndarray, seed: Optional[int]) -> np
     n_neighbors = min(15, max(2, n_samples - 1))
 
     # Use /dev/shm for fast IPC when available, else /tmp
+    # Unique per call, not per process: two concurrent runs in one Streamlit
+    # process (#49) would otherwise share the same files, and the first run's
+    # cleanup deletes the second run's output ("subprocess failed (rc=0)").
     shm_dir = "/dev/shm" if os.path.isdir("/dev/shm") else tempfile.gettempdir()
-    input_path = os.path.join(shm_dir, f"cuml_umap_in_{os.getpid()}.npy")
-    output_path = os.path.join(shm_dir, f"cuml_umap_out_{os.getpid()}.npy")
+    run_id = f"{os.getpid()}_{uuid.uuid4().hex[:8]}"
+    input_path = os.path.join(shm_dir, f"cuml_umap_in_{run_id}.npy")
+    output_path = os.path.join(shm_dir, f"cuml_umap_out_{run_id}.npy")
 
     np.save(input_path, embeddings)
     seed_arg = str(seed) if seed is not None else ""

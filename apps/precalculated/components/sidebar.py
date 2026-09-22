@@ -18,6 +18,7 @@ from shared.services.clustering_service import ClusteringService
 from shared.components.clustering_controls import render_projection_controls, render_kmeans_controls
 from shared.utils.backend import check_cuda_available, resolve_backend, is_oom_error
 from shared.utils.logging_config import get_logger
+from shared.lib.session import session_tag
 
 logger = get_logger(__name__)
 
@@ -618,7 +619,7 @@ def _run_projection(filtered_df, reduction_method, dim_reduction_backend, seed):
         actual_backend = resolve_backend(dim_reduction_backend, "reduction")
 
         logger.info("=" * 60)
-        logger.info("PROJECTION START")
+        logger.info(f"PROJECTION START ({session_tag()})")
         logger.info(f"Device: {device_info} (CUDA: {'Yes' if cuda_available else 'No'})")
         logger.info(f"Backend: {actual_backend} (requested: {dim_reduction_backend})")
 
@@ -679,7 +680,7 @@ def _run_kmeans(embeddings, n_clusters, clustering_backend, n_workers, seed):
     """Run KMeans on already-extracted embeddings and add labels to df_plot."""
     try:
         actual_backend = resolve_backend(clustering_backend, "clustering")
-        logger.info(f"KMeans: k={n_clusters}, backend={actual_backend}")
+        logger.info(f"KMeans: k={n_clusters}, backend={actual_backend} ({session_tag()})")
 
         with st.spinner(f"Running KMeans (k={n_clusters})..."):
             labels = ClusteringService.run_kmeans_only_safe(
