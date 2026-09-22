@@ -27,6 +27,7 @@ def app():
         render_kmeans_section,
     )
     from apps.precalculated.components.data_preview import render_data_preview
+    from shared.components.export import render_export_section
     from shared.components.visualization import render_scatter_plot
     from shared.components.summary import render_clustering_summary
 
@@ -64,6 +65,7 @@ def app():
     with col_settings:
         render_projection_section()
         render_kmeans_section()
+        render_export_section("precalculated")
 
     with col_plot:
         render_scatter_plot()

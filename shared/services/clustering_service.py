@@ -97,9 +97,14 @@ class ClusteringService:
         reduction_method: str,
         n_workers: int = 1,
         dim_reduction_backend: str = "auto",
-        seed: Optional[int] = None
+        seed: Optional[int] = None,
+        run_info: Optional[dict] = None,
     ) -> np.ndarray:
-        """Run only dimensionality reduction, returning 2D coordinates."""
+        """Run only dimensionality reduction, returning 2D coordinates.
+
+        ``run_info`` (optional dict) receives provenance facts from
+        ``reduce_dim``: the backend actually used, key params, fallbacks.
+        """
         n_samples, n_features = embeddings.shape
         logger.info(f"Dim reduction: samples={n_samples}, features={n_features}, "
                     f"method={reduction_method}, backend={dim_reduction_backend}, seed={seed}")
@@ -107,7 +112,8 @@ class ClusteringService:
         t_start = time.time()
         reduced = reduce_dim(
             embeddings, reduction_method,
-            seed=seed, n_workers=n_workers, backend=dim_reduction_backend
+            seed=seed, n_workers=n_workers, backend=dim_reduction_backend,
+            run_info=run_info,
         )
         logger.info(f"Dim reduction complete: {reduced.shape} in {time.time() - t_start:.2f}s")
         return reduced
@@ -118,20 +124,25 @@ class ClusteringService:
         reduction_method: str,
         n_workers: int = 1,
         dim_reduction_backend: str = "auto",
-        seed: Optional[int] = None
+        seed: Optional[int] = None,
+        run_info: Optional[dict] = None,
     ) -> np.ndarray:
         """Dim reduction with automatic GPU-to-CPU fallback."""
         try:
             return ClusteringService.run_dim_reduction(
-                embeddings, reduction_method, n_workers, dim_reduction_backend, seed
+                embeddings, reduction_method, n_workers, dim_reduction_backend, seed,
+                run_info=run_info,
             )
         except (RuntimeError, OSError) as e:
             if is_oom_error(e):
                 raise
             if is_cuda_arch_error(e) or is_gpu_error(e):
                 logger.warning(f"GPU error ({e}), falling back to sklearn")
+                if run_info is not None:
+                    run_info["fallback_from"] = dim_reduction_backend
                 return ClusteringService.run_dim_reduction(
-                    embeddings, reduction_method, n_workers, "sklearn", seed
+                    embeddings, reduction_method, n_workers, "sklearn", seed,
+                    run_info=run_info,
                 )
             raise
 
@@ -141,9 +152,13 @@ class ClusteringService:
         n_clusters: int,
         n_workers: int = 1,
         clustering_backend: str = "auto",
-        seed: Optional[int] = None
+        seed: Optional[int] = None,
+        run_info: Optional[dict] = None,
     ) -> np.ndarray:
-        """Run only KMeans, returning labels array."""
+        """Run only KMeans, returning labels array.
+
+        ``run_info`` (optional dict) receives the backend actually used.
+        """
         n_samples, n_features = embeddings.shape
         logger.info(f"KMeans: samples={n_samples}, features={n_features}, "
                     f"k={n_clusters}, backend={clustering_backend}, seed={seed}")
@@ -151,7 +166,8 @@ class ClusteringService:
         t_start = time.time()
         _, labels = run_kmeans(
             embeddings, int(n_clusters),
-            seed=seed, n_workers=n_workers, backend=clustering_backend
+            seed=seed, n_workers=n_workers, backend=clustering_backend,
+            run_info=run_info,
         )
         logger.info(f"KMeans complete: {len(np.unique(labels))} clusters in {time.time() - t_start:.2f}s")
         return labels
@@ -162,20 +178,25 @@ class ClusteringService:
         n_clusters: int,
         n_workers: int = 1,
         clustering_backend: str = "auto",
-        seed: Optional[int] = None
+        seed: Optional[int] = None,
+        run_info: Optional[dict] = None,
     ) -> np.ndarray:
         """KMeans with automatic GPU-to-CPU fallback."""
         try:
             return ClusteringService.run_kmeans_only(
-                embeddings, n_clusters, n_workers, clustering_backend, seed
+                embeddings, n_clusters, n_workers, clustering_backend, seed,
+                run_info=run_info,
             )
         except (RuntimeError, OSError) as e:
             if is_oom_error(e):
                 raise
             if is_cuda_arch_error(e) or is_gpu_error(e):
                 logger.warning(f"GPU error ({e}), falling back to sklearn")
+                if run_info is not None:
+                    run_info["fallback_from"] = clustering_backend
                 return ClusteringService.run_kmeans_only(
-                    embeddings, n_clusters, n_workers, "sklearn", seed
+                    embeddings, n_clusters, n_workers, "sklearn", seed,
+                    run_info=run_info,
                 )
             raise
 

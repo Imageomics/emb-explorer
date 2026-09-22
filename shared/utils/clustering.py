@@ -144,7 +144,16 @@ def _prepare_embeddings(embeddings: np.ndarray, operation: str) -> np.ndarray:
     return embeddings
 
 
-def reduce_dim(embeddings: np.ndarray, method: str = "PCA", seed: Optional[int] = None, n_workers: int = 1, backend: str = "auto"):
+def _note(run_info: Optional[dict], **facts) -> None:
+    """Record provenance facts (backend actually used, key params) into the
+    caller-supplied ``run_info`` dict, if any. Backend selection and GPU->CPU
+    fallbacks happen deep inside this module, so this is the only place that
+    knows what really ran."""
+    if run_info is not None:
+        run_info.update(facts)
+
+
+def reduce_dim(embeddings: np.ndarray, method: str = "PCA", seed: Optional[int] = None, n_workers: int = 1, backend: str = "auto", run_info: Optional[dict] = None):
     """
     Reduce the dimensionality of embeddings to 2D using PCA, t-SNE, or UMAP.
 
@@ -154,6 +163,10 @@ def reduce_dim(embeddings: np.ndarray, method: str = "PCA", seed: Optional[int] 
         seed (int, optional): Random seed for reproducibility. Defaults to None (random).
         n_workers (int, optional): Number of parallel workers for t-SNE/UMAP. Defaults to 1.
         backend (str, optional): Backend to use - "auto", "sklearn", "cuml". Defaults to "auto".
+        run_info (dict, optional): If given, receives provenance facts about the
+            run: ``backend`` ("sklearn"/"cuml") actually used, ``params``
+            (perplexity / n_neighbors), and ``fallback_from`` when a GPU
+            attempt fell back to sklearn.
 
     Returns:
         np.ndarray: The 2D reduced embeddings of shape (n_samples, 2).
@@ -179,17 +192,17 @@ def reduce_dim(embeddings: np.ndarray, method: str = "PCA", seed: Optional[int] 
     start_time = time.time()
     if use_cuml:
         logger.info(f"Using cuML backend for {method}")
-        result = _reduce_dim_cuml(embeddings, method, seed, n_workers)
+        result = _reduce_dim_cuml(embeddings, method, seed, n_workers, run_info)
     else:
         logger.info(f"Using sklearn backend for {method}")
-        result = _reduce_dim_sklearn(embeddings, method, seed, n_workers)
+        result = _reduce_dim_sklearn(embeddings, method, seed, n_workers, run_info)
 
     elapsed = time.time() - start_time
     logger.info(f"Dimensionality reduction completed in {elapsed:.2f}s")
     return result
 
 
-def _reduce_dim_sklearn(embeddings: np.ndarray, method: str, seed: Optional[int], n_workers: int):
+def _reduce_dim_sklearn(embeddings: np.ndarray, method: str, seed: Optional[int], n_workers: int, run_info: Optional[dict] = None):
     """Dimensionality reduction using sklearn/umap backends."""
     from sklearn.decomposition import PCA
     from sklearn.manifold import TSNE
@@ -200,10 +213,12 @@ def _reduce_dim_sklearn(embeddings: np.ndarray, method: str, seed: Optional[int]
 
     if method.upper() == "PCA":
         reducer = PCA(n_components=2)
+        _note(run_info, backend="sklearn", params={})
     elif method.upper() == "TSNE":
         # Adjust perplexity to be valid for the sample size
         n_samples = embeddings.shape[0]
         perplexity = min(30, max(5, n_samples // 3))  # Ensure perplexity is reasonable
+        _note(run_info, backend="sklearn", params={"perplexity": perplexity})
 
         if seed is not None:
             reducer = TSNE(n_components=2, perplexity=perplexity, random_state=seed, n_jobs=effective_workers)
@@ -214,6 +229,7 @@ def _reduce_dim_sklearn(embeddings: np.ndarray, method: str, seed: Optional[int]
         # Adjust n_neighbors to be valid for the sample size
         n_samples = embeddings.shape[0]
         n_neighbors = min(15, max(2, n_samples - 1))
+        _note(run_info, backend="sklearn", params={"n_neighbors": n_neighbors})
 
         if seed is not None:
             reducer = UMAP(n_components=2, n_neighbors=n_neighbors, random_state=seed, n_jobs=effective_workers)
@@ -224,7 +240,7 @@ def _reduce_dim_sklearn(embeddings: np.ndarray, method: str, seed: Optional[int]
     return reducer.fit_transform(embeddings)
 
 
-def _reduce_dim_cuml(embeddings: np.ndarray, method: str, seed: Optional[int], n_workers: int):
+def _reduce_dim_cuml(embeddings: np.ndarray, method: str, seed: Optional[int], n_workers: int, run_info: Optional[dict] = None):
     """Dimensionality reduction using cuML GPU backends.
 
     Expects embeddings to already be L2-normalized float32 from _prepare_embeddings().
@@ -237,7 +253,7 @@ def _reduce_dim_cuml(embeddings: np.ndarray, method: str, seed: Optional[int], n
             # (NN-descent numerical instability).  SIGFPE is a signal, not a
             # Python exception, so try/except cannot catch it.  Run in an
             # isolated subprocess so the main process (Streamlit) survives.
-            return _run_cuml_umap_subprocess(embeddings, seed)
+            return _run_cuml_umap_subprocess(embeddings, seed, run_info)
 
         # PCA and TSNE are stable — run in-process
         embeddings_gpu = cp.asarray(embeddings, dtype=cp.float32)
@@ -245,10 +261,12 @@ def _reduce_dim_cuml(embeddings: np.ndarray, method: str, seed: Optional[int], n
         if method.upper() == "PCA":
             from cuml.decomposition import PCA as cuPCA
             reducer = cuPCA(n_components=2)
+            _note(run_info, backend="cuml", params={})
         elif method.upper() == "TSNE":
             from cuml.manifold import TSNE as cuTSNE
             n_samples = embeddings.shape[0]
             perplexity = min(30, max(5, n_samples // 3))
+            _note(run_info, backend="cuml", params={"perplexity": perplexity, "solver": "exact"})
 
             # Force the exact solver: cuML's default Barnes-Hut collapses to a
             # ~1D line on near-homogeneous data (#40). exact is O(N^2) but fine
@@ -269,10 +287,12 @@ def _reduce_dim_cuml(embeddings: np.ndarray, method: str, seed: Optional[int], n
             logger.warning(f"cuML {method} not supported on this GPU architecture, falling back to sklearn")
         else:
             logger.warning(f"cuML reduction failed ({e}), falling back to sklearn")
-        return _reduce_dim_sklearn(embeddings, method, seed, n_workers)
+        _note(run_info, fallback_from="cuml")
+        return _reduce_dim_sklearn(embeddings, method, seed, n_workers, run_info)
     except Exception as e:
         logger.warning(f"cuML reduction failed ({e}), falling back to sklearn")
-        return _reduce_dim_sklearn(embeddings, method, seed, n_workers)
+        _note(run_info, fallback_from="cuml")
+        return _reduce_dim_sklearn(embeddings, method, seed, n_workers, run_info)
 
 
 # Standalone script executed in a subprocess for cuML UMAP.
@@ -303,7 +323,7 @@ np.save(output_path, cp.asnumpy(result))
 """
 
 
-def _run_cuml_umap_subprocess(embeddings: np.ndarray, seed: Optional[int]) -> np.ndarray:
+def _run_cuml_umap_subprocess(embeddings: np.ndarray, seed: Optional[int], run_info: Optional[dict] = None) -> np.ndarray:
     """Run cuML UMAP in an isolated subprocess to survive SIGFPE crashes.
 
     cuML UMAP's NN-descent can trigger a floating-point exception (SIGFPE) on
@@ -313,6 +333,7 @@ def _run_cuml_umap_subprocess(embeddings: np.ndarray, seed: Optional[int]) -> np
     """
     n_samples = embeddings.shape[0]
     n_neighbors = min(15, max(2, n_samples - 1))
+    _note(run_info, backend="cuml", params={"n_neighbors": n_neighbors})
 
     # Use /dev/shm for fast IPC when available, else /tmp
     shm_dir = "/dev/shm" if os.path.isdir("/dev/shm") else tempfile.gettempdir()
@@ -348,7 +369,7 @@ def _run_cuml_umap_subprocess(embeddings: np.ndarray, seed: Optional[int]) -> np
             except OSError:
                 pass  # Best-effort cleanup of temp IPC files
 
-def run_kmeans(embeddings: np.ndarray, n_clusters: int, seed: Optional[int] = None, n_workers: int = 1, backend: str = "auto"):
+def run_kmeans(embeddings: np.ndarray, n_clusters: int, seed: Optional[int] = None, n_workers: int = 1, backend: str = "auto", run_info: Optional[dict] = None):
     """
     Perform KMeans clustering on the given embeddings.
 
@@ -358,6 +379,8 @@ def run_kmeans(embeddings: np.ndarray, n_clusters: int, seed: Optional[int] = No
         seed (int, optional): Random seed for reproducibility. Defaults to None (random).
         n_workers (int, optional): Number of parallel workers (used by cuML if available).
         backend (str, optional): Clustering backend - "auto", "sklearn", or "cuml". Defaults to "auto".
+        run_info (dict, optional): If given, receives ``backend`` actually used
+            and ``fallback_from`` when a GPU attempt fell back to sklearn.
 
     Returns:
         kmeans (KMeans or custom object): The fitted clustering object.
@@ -375,24 +398,25 @@ def run_kmeans(embeddings: np.ndarray, n_clusters: int, seed: Optional[int] = No
     cuda_available = _check_cuda()
     if backend == "cuml" and HAS_CUML and cuda_available:
         logger.info("Using cuML backend for KMeans")
-        result = _run_kmeans_cuml(embeddings, n_clusters, seed, n_workers)
+        result = _run_kmeans_cuml(embeddings, n_clusters, seed, n_workers, run_info)
     elif backend == "auto" and HAS_CUML and cuda_available and n_samples > 500:
         logger.info("Auto-selected cuML backend for KMeans (GPU available, large dataset)")
-        result = _run_kmeans_cuml(embeddings, n_clusters, seed, n_workers)
+        result = _run_kmeans_cuml(embeddings, n_clusters, seed, n_workers, run_info)
     else:
         logger.info("Using sklearn backend for KMeans")
-        result = _run_kmeans_sklearn(embeddings, n_clusters, seed)
+        result = _run_kmeans_sklearn(embeddings, n_clusters, seed, run_info)
 
     elapsed = time.time() - start_time
     logger.info(f"KMeans clustering completed in {elapsed:.2f}s")
     return result
 
 
-def _run_kmeans_cuml(embeddings: np.ndarray, n_clusters: int, seed: Optional[int] = None, n_workers: int = 1):
+def _run_kmeans_cuml(embeddings: np.ndarray, n_clusters: int, seed: Optional[int] = None, n_workers: int = 1, run_info: Optional[dict] = None):
     """KMeans using cuML GPU backend."""
     try:
         import cupy as cp
         from cuml.cluster import KMeans as cuKMeans
+        _note(run_info, backend="cuml")
 
         # Convert to cupy array for GPU processing
         embeddings_gpu = cp.asarray(embeddings, dtype=cp.float32)
@@ -432,12 +456,14 @@ def _run_kmeans_cuml(embeddings: np.ndarray, n_clusters: int, seed: Optional[int
         
     except Exception as e:
         logger.warning(f"cuML clustering failed ({e}), falling back to sklearn")
-        return _run_kmeans_sklearn(embeddings, n_clusters, seed)
+        _note(run_info, fallback_from="cuml")
+        return _run_kmeans_sklearn(embeddings, n_clusters, seed, run_info)
 
 
-def _run_kmeans_sklearn(embeddings: np.ndarray, n_clusters: int, seed: Optional[int] = None):
+def _run_kmeans_sklearn(embeddings: np.ndarray, n_clusters: int, seed: Optional[int] = None, run_info: Optional[dict] = None):
     """KMeans using scikit-learn backend."""
     from sklearn.cluster import KMeans
+    _note(run_info, backend="sklearn")
     if seed is not None:
         kmeans = KMeans(n_clusters=n_clusters, random_state=seed)
     else:

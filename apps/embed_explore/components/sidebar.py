@@ -20,6 +20,15 @@ from shared.components.clustering_controls import (
 )
 from shared.utils.backend import check_cuda_available, resolve_backend, is_oom_error
 from shared.utils.logging_config import get_logger
+from shared.utils.provenance import (
+    carry_over_analysis_columns,
+    make_projection_tag,
+    new_registry,
+    prune_registry,
+    record_kmeans,
+    record_projection,
+)
+from shared.components.export import render_export_section
 
 logger = get_logger(__name__)
 
@@ -74,6 +83,8 @@ def render_embedding_section() -> Tuple[bool, Optional[str], Optional[str], int,
                         st.session_state.labels = None
                         st.session_state.data = None
                         st.session_state.selected_image_idx = None
+                        st.session_state.provenance = new_registry()
+                        st.session_state.current_projection_tag = None
                     else:
                         logger.info(f"Embeddings stored: shape={embeddings.shape}, dtype={embeddings.dtype}")
                         st.success(f"Generated {embeddings.shape[0]} image embeddings.")
@@ -86,6 +97,8 @@ def render_embedding_section() -> Tuple[bool, Optional[str], Optional[str], int,
                         st.session_state.kmeans_column = None
                         st.session_state.data = None
                         st.session_state.selected_image_idx = None
+                        st.session_state.provenance = new_registry()
+                        st.session_state.current_projection_tag = None
 
                 except Exception as e:
                     st.error(f"Error during embedding: {e}")
@@ -158,16 +171,22 @@ def _run_projection(embeddings, valid_paths, reduction_method, dim_reduction_bac
         n_samples, emb_dim = embeddings.shape
         logger.info(f"Records: {n_samples:,} | Dim: {emb_dim}")
 
+        run_info: dict = {}
         with st.spinner(f"Running {reduction_method}..."):
             reduced = ClusteringService.run_dim_reduction_safe(
                 embeddings, reduction_method,
-                n_workers=8, dim_reduction_backend=actual_backend, seed=seed
+                n_workers=8, dim_reduction_backend=actual_backend, seed=seed,
+                run_info=run_info,
             )
 
         t_total = time.time() - t_start
         logger.info(f"Projection complete in {t_total:.2f}s")
 
-        # Build plot dataframe (no cluster column)
+        # Build plot dataframe (no cluster column). x/y is the current view;
+        # the run is also retained under its tag (<tag>_x/_y, #48) so earlier
+        # projections survive re-projection and export together.
+        registry = st.session_state.get("provenance") or new_registry()
+        tag = make_projection_tag(reduction_method, seed, registry["projections"])
         df_plot = pd.DataFrame({
             "x": reduced[:, 0],
             "y": reduced[:, 1],
@@ -175,13 +194,26 @@ def _run_projection(embeddings, valid_paths, reduction_method, dim_reduction_bac
             "file_name": [os.path.basename(p) for p in valid_paths],
             "idx": range(len(valid_paths)),
         })
+        df_plot[f"{tag}_x"] = reduced[:, 0]
+        df_plot[f"{tag}_y"] = reduced[:, 1]
 
-        # Carry over any prior KMeans columns from the previous df_plot (if length matches)
-        prev_df = st.session_state.get("data")
-        if prev_df is not None and len(prev_df) == len(df_plot):
-            for col in prev_df.columns:
-                if col.startswith("KMeans (k="):
-                    df_plot[col] = prev_df[col].values
+        # Carry over retained projections and KMeans columns from the previous
+        # df_plot (positional; skipped if the row count changed).
+        carry_over_analysis_columns(st.session_state.get("data"), df_plot)
+        record_projection(
+            registry, tag,
+            method=reduction_method,
+            backend=run_info.get("backend", actual_backend),
+            requested_backend=dim_reduction_backend,
+            seed=seed,
+            params=run_info.get("params"),
+            n_samples=n_samples,
+            elapsed_seconds=t_total,
+            fallback_from=run_info.get("fallback_from"),
+        )
+        prune_registry(registry, df_plot)
+        st.session_state.provenance = registry
+        st.session_state.current_projection_tag = tag
 
         data_hash = hashlib.md5(f"{len(df_plot)}_{reduction_method}_{t_total}".encode()).hexdigest()[:8]
         st.session_state.data = df_plot
@@ -213,10 +245,13 @@ def _run_kmeans(embeddings, n_clusters, clustering_backend, n_workers, seed):
         actual_backend = resolve_backend(clustering_backend, "clustering")
         logger.info(f"KMeans: k={n_clusters}, backend={actual_backend}")
 
+        run_info: dict = {}
+        t_start = time.time()
         with st.spinner(f"Running KMeans (k={n_clusters})..."):
             labels = ClusteringService.run_kmeans_only_safe(
                 embeddings, n_clusters,
-                n_workers=n_workers, clustering_backend=actual_backend, seed=seed
+                n_workers=n_workers, clustering_backend=actual_backend, seed=seed,
+                run_info=run_info,
             )
 
         df_plot = st.session_state.data
@@ -224,6 +259,19 @@ def _run_kmeans(embeddings, n_clusters, clustering_backend, n_workers, seed):
 
         df_plot[kmeans_col] = labels.astype(str)
         st.session_state.data = df_plot
+
+        registry = st.session_state.get("provenance") or new_registry()
+        record_kmeans(
+            registry, kmeans_col,
+            k=n_clusters,
+            backend=run_info.get("backend", actual_backend),
+            requested_backend=clustering_backend,
+            seed=seed,
+            n_workers=n_workers,
+            elapsed_seconds=time.time() - t_start,
+            fallback_from=run_info.get("fallback_from"),
+        )
+        st.session_state.provenance = registry
         st.session_state.labels = labels
         st.session_state.kmeans_column = kmeans_col
 
@@ -367,13 +415,16 @@ def render_save_section():
 
 
 def render_clustering_sidebar():
-    """Render the complete sidebar with embed / project / KMeans / save sections."""
+    """Render the complete sidebar: embed / project / KMeans / export sections on
+    the Compute tab, image save / repartition sections on the Save tab."""
     tab_compute, tab_save = st.tabs(["Compute", "Save"])
 
     with tab_compute:
         render_embedding_section()
         render_projection_section()
         render_kmeans_section()
+        # Same placement as the precalculated app: export follows clustering.
+        render_export_section("embed_explore")
 
     with tab_save:
         render_save_section()

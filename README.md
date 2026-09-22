@@ -81,6 +81,13 @@ list-models          # List available embedding models
 
 An example dataset (`data/example_1k.parquet`) is provided with BioCLIP 2 embeddings for testing. Please see the [data README](data/README.md) for more information about this sample set.
 
+### Export analysis
+
+Both apps have an **Export analysis** section below the KMeans step that downloads the session's results as two files:
+
+- **Table (CSV)**, one row per record: the record key (`uuid` / `image_path`), every projection run of the session as `<tag>_x` / `<tag>_y` (tag = method + seed, e.g. `tsne_s614`; unseeded runs are numbered `tsne_r1`, `tsne_r2`, and so on), every `KMeans (k=...)` column as `kmeans_k<k>`, and optionally (toggle) the original metadata columns. Embedding vectors are never exported.
+- **Provenance (JSON)**: library versions, source dataset and record count, and per projection / KMeans column the method, the backend actually used (GPU to CPU fallbacks are recorded), seed, key parameters and timestamp.
+
 ### Remote HPC Usage
 
 ```bash

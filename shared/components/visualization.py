@@ -6,6 +6,7 @@ import streamlit as st
 import altair as alt
 
 from shared.utils.logging_config import get_logger
+from shared.utils.provenance import is_projection_column
 
 logger = get_logger(__name__)
 
@@ -82,8 +83,11 @@ def _render_chart_fragment(df_plot):
     skip_color_cols = {'x', 'y', 'idx', 'uuid', 'emb', 'embedding', 'embeddings', 'vector',
                        'identifier', 'image_url', 'url', 'img_url', 'image',
                        'image_path', 'file_name'}
+    # Retained projection pairs (<tag>_x/_y, see shared/utils/provenance.py)
+    # are coordinates, not categories; never offered as colors.
     colorable_cols = [c for c in df_plot.columns
-                      if c not in skip_color_cols and df_plot[c].nunique() <= 100]
+                      if c not in skip_color_cols and not is_projection_column(c)
+                      and df_plot[c].nunique() <= 100]
 
     # Sort KMeans columns to front (all runs, sorted by k)
     kmeans_cols = sorted(
@@ -142,7 +146,8 @@ def _render_chart_fragment(df_plot):
         skip_cols.add(color_col)
 
     # Add remaining metadata columns
-    metadata_cols = [c for c in df_plot.columns if c not in skip_cols][:15]
+    metadata_cols = [c for c in df_plot.columns
+                     if c not in skip_cols and not is_projection_column(c)][:15]
     tooltip_fields.extend(metadata_cols)
 
     # Title
