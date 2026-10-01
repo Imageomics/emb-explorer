@@ -99,6 +99,29 @@ class TestReduceDimSklearn:
         r2 = _reduce_dim_sklearn(sample_embeddings_small, "PCA", seed=42, n_workers=1)
         np.testing.assert_array_equal(r1, r2)
 
+    def test_pca_seed_controls_stochastic_solver(self, sample_embeddings):
+        # Guard the app's PCA call, which uses svd_solver="auto": dropping
+        # random_state regressed reproducibility when auto resolves to the
+        # stochastic randomized solver (a dimension over 500, as in this
+        # 100x512 fixture). The 10x32 test above stays on the deterministic
+        # full solver and cannot catch that.
+        #
+        # Premise check first: unseeded runs must differ, proving auto picked
+        # a stochastic solver here. If a future sklearn heuristic or sklearnex
+        # patch makes auto deterministic on this fixture, this fails loudly so
+        # the fixture gets updated — instead of the test silently guarding
+        # nothing.
+        u1 = _reduce_dim_sklearn(sample_embeddings, "PCA", seed=None, n_workers=1)
+        u2 = _reduce_dim_sklearn(sample_embeddings, "PCA", seed=None, n_workers=1)
+        assert not np.array_equal(u1, u2), (
+            "svd_solver='auto' no longer picks a stochastic solver for this "
+            "fixture; enlarge the fixture so this test keeps guarding the seed"
+        )
+
+        r1 = _reduce_dim_sklearn(sample_embeddings, "PCA", seed=42, n_workers=1)
+        r2 = _reduce_dim_sklearn(sample_embeddings, "PCA", seed=42, n_workers=1)
+        np.testing.assert_array_equal(r1, r2)
+
     def test_invalid_method_raises(self, sample_embeddings_small):
         with pytest.raises(ValueError, match="Unsupported method"):
             _reduce_dim_sklearn(sample_embeddings_small, "INVALID", seed=42, n_workers=1)

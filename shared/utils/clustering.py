@@ -199,7 +199,9 @@ def _reduce_dim_sklearn(embeddings: np.ndarray, method: str, seed: Optional[int]
     effective_workers = -1 if n_workers > 1 else n_workers
 
     if method.upper() == "PCA":
-        reducer = PCA(n_components=2)
+        # Pass random_state so the randomized SVD solver (auto-selected for
+        # large inputs) is reproducible when a seed is set; None keeps it random.
+        reducer = PCA(n_components=2, random_state=seed)
     elif method.upper() == "TSNE":
         # Adjust perplexity to be valid for the sample size
         n_samples = embeddings.shape[0]
@@ -244,15 +246,21 @@ def _reduce_dim_cuml(embeddings: np.ndarray, method: str, seed: Optional[int], n
 
         if method.upper() == "PCA":
             from cuml.decomposition import PCA as cuPCA
+            # cuML PCA takes no random_state and needs none: its full-SVD solver
+            # is deterministic, so results are already reproducible run-to-run.
             reducer = cuPCA(n_components=2)
         elif method.upper() == "TSNE":
             from cuml.manifold import TSNE as cuTSNE
             n_samples = embeddings.shape[0]
             perplexity = min(30, max(5, n_samples // 3))
 
-            # Force the exact solver: cuML's default Barnes-Hut collapses to a
-            # ~1D line on near-homogeneous data (#40). exact is O(N^2) but fine
-            # at our interactive scale; a faster Barnes-Hut-with-guard can come later.
+            # Force the exact solver: cuML's approximate solvers collapse to a
+            # ~1D line on near-homogeneous data (#40): verified for FFT even on
+            # cuML 26.08, whose seeded-FFT determinism fix (rapidsai/cuml#8123)
+            # therefore doesn't help us. exact is collapse-free but NOT
+            # deterministic (GPU accumulation order), even with random_state
+            # reproducible t-SNE requires the sklearn backend (see README).
+            # exact is O(N^2) but fine at our interactive scale.
             if seed is not None:
                 reducer = cuTSNE(n_components=2, perplexity=perplexity, method="exact", random_state=seed)
             else:
