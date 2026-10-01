@@ -186,7 +186,7 @@ class ClusteringService:
         df_plot: pd.DataFrame
     ) -> Tuple[pd.DataFrame, Dict[int, List[int]]]:
         """
-        Generate clustering summary statistics and representative images.
+        Generate clustering summary statistics and representative candidates.
 
         Args:
             embeddings: Original embeddings
@@ -194,27 +194,27 @@ class ClusteringService:
             df_plot: Clustering dataframe
 
         Returns:
-            Tuple of (summary dataframe, representatives dict)
+            Tuple of (summary dataframe, representatives dict). The dict maps
+            each cluster label to a ranked candidate list (closest-to-centroid
+            first), oversampled beyond the display count so renderers can skip
+            entries whose image fails to load — see
+            `find_cluster_representatives`. Renderers cap how many they show.
         """
+        from shared.utils.representatives import find_cluster_representatives
+
         logger.info("Generating clustering summary statistics")
         cluster_ids = np.unique(labels)
         logger.debug(f"Found {len(cluster_ids)} unique clusters")
-        summary_data = []
-        representatives = {}
 
+        # Ranked representative candidates per cluster (shared utility).
+        representatives = find_cluster_representatives(embeddings, labels)
+
+        summary_data = []
         for k in cluster_ids:
             idxs = np.where(labels == k)[0]
             cluster_embeds = embeddings[idxs]
             centroid = cluster_embeds.mean(axis=0)
-
-            # Internal variance
             variance = np.mean(np.sum((cluster_embeds - centroid) ** 2, axis=1))
-
-            # Find 3 closest images
-            dists = np.sum((cluster_embeds - centroid) ** 2, axis=1)
-            closest_indices = idxs[np.argsort(dists)[:3]]
-            representatives[k] = closest_indices
-
             summary_data.append({
                 "Cluster": int(k),
                 "Count": len(idxs),

@@ -26,7 +26,10 @@ def app():
         render_projection_section,
         render_kmeans_section,
     )
-    from apps.precalculated.components.data_preview import render_data_preview
+    from apps.precalculated.components.data_preview import (
+        render_data_preview,
+        render_cluster_representatives,
+    )
     from shared.components.visualization import render_scatter_plot
     from shared.components.summary import render_clustering_summary
 
@@ -71,9 +74,10 @@ def app():
     with col_preview:
         render_data_preview()
 
-    # Bottom: Taxonomy summary
+    # Bottom: Taxonomy summary + representative images
     st.markdown("---")
     render_clustering_summary(show_taxonomy=True)
+    render_cluster_representatives()
 
 
 if __name__ == "__main__":
