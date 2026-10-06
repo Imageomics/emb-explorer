@@ -173,6 +173,13 @@ class EmbeddingService:
         total = len(image_paths)
         logger.info(f"Found {total} images in {image_dir}")
 
+        if total == 0:
+            # Nothing to embed: return before paying for the model load (#50).
+            logger.warning(f"No images found in {image_dir} (recursive={recursive})")
+            if progress_callback:
+                progress_callback(1.0, "No images found")
+            return np.empty((0, 0), dtype=np.float32), []
+
         if progress_callback:
             progress_callback(0.05, f"Found {total} images. Loading model...")
 
