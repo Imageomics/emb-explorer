@@ -55,6 +55,12 @@ def render_embedding_section() -> Tuple[bool, Optional[str], Optional[str], int,
                 value=32,
                 step=1
             )
+        recursive = st.checkbox(
+            "Include subfolders",
+            value=True,
+            key="embed_recursive",
+            help="Also embed images in nested folders (e.g. one folder per species).",
+        )
         embed_button = st.button("Run Embedding")
 
         # Handle embedding execution
@@ -63,7 +69,7 @@ def render_embedding_section() -> Tuple[bool, Optional[str], Optional[str], int,
                 try:
                     embeddings, valid_paths = EmbeddingService.generate_embeddings(
                         image_dir, model_name, batch_size, n_workers,
-                        progress_callback=progress
+                        progress_callback=progress, recursive=recursive,
                     )
 
                     if embeddings.shape[0] == 0:
