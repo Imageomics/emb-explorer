@@ -67,7 +67,7 @@ def render_embedding_section() -> Tuple[bool, Optional[str], Optional[str], int,
                     )
 
                     if embeddings.shape[0] == 0:
-                        st.error("No valid image embeddings found.")
+                        progress.fail("No images found in this folder. Check the path.")
                         logger.warning("Embedding generation returned 0 embeddings")
                         st.session_state.embeddings = None
                         st.session_state.valid_paths = None
@@ -88,7 +88,7 @@ def render_embedding_section() -> Tuple[bool, Optional[str], Optional[str], int,
                         st.session_state.selected_image_idx = None
 
                 except Exception as e:
-                    st.error(f"Error during embedding: {e}")
+                    progress.fail(f"Error during embedding: {e}")
                     logger.exception("Embedding generation failed")
 
         elif embed_button:
@@ -327,7 +327,7 @@ def render_save_section():
                     )
                     st.info(f"Summary CSV saved at {csv_path}")
                 except Exception as e:
-                    save_status_placeholder.error(f"Error saving images: {e}")
+                    progress.fail(f"Error saving images: {e}")
         elif save_cluster_button:
             save_status_placeholder.warning("Please select at least one cluster.")
 
@@ -363,7 +363,7 @@ def render_save_section():
                     )
                     st.info(f"Summary CSV saved at {csv_path}")
                 except Exception as e:
-                    repartition_status_placeholder.error(f"Error repartitioning images: {e}")
+                    progress.fail(f"Error repartitioning images: {e}")
 
 
 def render_clustering_sidebar():
