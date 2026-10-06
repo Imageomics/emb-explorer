@@ -29,6 +29,39 @@ HAS_TORCH_PACKAGE: bool = importlib.util.find_spec("torch") is not None
 # Cache CUDA availability to avoid repeated checks
 _cuda_check_cache: Optional[Tuple[bool, str]] = None
 
+# Dataset-size range (samples) in which "auto" picks cuML over sklearn, per
+# method. Chosen from measured crossovers of the app's own reduce_dim /
+# run_kmeans paths (scripts/bench_backend_threshold.py); the exact numbers
+# depend on the GPU, CPU count and library versions, so treat them as
+# defaults to re-measure, not constants. The shape of the rule is stable:
+# - PCA, KMEANS: cheap either way; cuML wins once transfer cost is amortized.
+# - UMAP:   cuML runs in a subprocess, so a fixed start-up cost must be
+#           amortized over a large enough dataset.
+# - TSNE:   the app forces cuML's exact O(N^2) solver (#40), so cuML only
+#           wins on small data and loses increasingly above the bound.
+# Entries are (min_samples, max_samples); None is unbounded. An explicit
+# "cuml" request is always honored. reduce_dim / run_kmeans use this same
+# rule so the layers agree (#50).
+CUML_AUTO_RANGE = {
+    "PCA": (500, None),
+    "TSNE": (None, 3000),
+    "UMAP": (10000, None),
+    "KMEANS": (1000, None),
+}
+
+
+def auto_prefers_cuml(method: str, n_samples: Optional[int]) -> bool:
+    """Whether "auto" should pick cuML for ``method`` at this dataset size,
+    hardware aside. Unknown size or method keeps the hardware-only rule."""
+    if n_samples is None:
+        return True
+    lo, hi = CUML_AUTO_RANGE.get(method.upper(), (None, None))
+    if lo is not None and n_samples < lo:
+        return False
+    if hi is not None and n_samples >= hi:
+        return False
+    return True
+
 
 def check_cuda_available() -> Tuple[bool, str]:
     """
@@ -83,16 +116,27 @@ def check_cuml_available() -> bool:
         return False
 
 
-def resolve_backend(backend: str, operation: str = "general") -> str:
+def resolve_backend(
+    backend: str,
+    operation: str = "general",
+    n_samples: Optional[int] = None,
+    method: Optional[str] = None,
+) -> str:
     """
-    Resolve 'auto' backend to actual backend based on available hardware.
+    Resolve 'auto' backend to actual backend based on hardware, method and data size.
 
     Args:
         backend: Requested backend ("auto", "sklearn", "cuml")
-        operation: Operation type for logging ("clustering", "reduction", "general")
+        operation: Operation type ("clustering", "reduction", "general")
+        n_samples: Dataset size. With "auto", sizes outside the method's
+            CUML_AUTO_RANGE resolve to sklearn even when a GPU is available.
+            None keeps the hardware-only rule.
+        method: "PCA" / "TSNE" / "UMAP" for reduction; defaults to "KMEANS"
+            for clustering. Needed for the size rule.
 
     Returns:
-        Resolved backend name. CPU paths always go through sklearn.
+        Resolved backend name. CPU paths always go through sklearn; an
+        explicit "cuml" or "sklearn" request is returned unchanged.
     """
     if backend != "auto":
         logger.debug(f"Using explicitly requested backend: {backend}")
@@ -100,14 +144,21 @@ def resolve_backend(backend: str, operation: str = "general") -> str:
 
     cuda_available, device_info = check_cuda_available()
     # Only probe for cuML when CUDA is actually available.
-    if cuda_available and check_cuml_available():
-        resolved = "cuml"
-        logger.info(f"Auto-resolved {operation} backend to cuML (GPU: {device_info})")
-    else:
-        resolved = "sklearn"
+    if not (cuda_available and check_cuml_available()):
         logger.info(f"Auto-resolved {operation} backend to sklearn (CPU)")
+        return "sklearn"
 
-    return resolved
+    method_key = (method or ("KMEANS" if operation == "clustering" else "")).upper()
+    if n_samples is not None and method_key and not auto_prefers_cuml(method_key, n_samples):
+        lo, hi = CUML_AUTO_RANGE[method_key]
+        where = f"below {lo}" if lo is not None and n_samples < lo else f"at or above {hi}"
+        logger.info(f"Auto-resolved {operation} backend to sklearn for {method_key}: {n_samples} "
+                    f"samples is {where}, where sklearn is faster (GPU {device_info} available; "
+                    f"choose 'cuml' explicitly to force it)")
+        return "sklearn"
+
+    logger.info(f"Auto-resolved {operation} backend to cuML (GPU: {device_info})")
+    return "cuml"
 
 
 def get_backend_info() -> dict:

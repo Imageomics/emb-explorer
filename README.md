@@ -55,7 +55,7 @@ uv pip install -e ".[gpu-cu12]"
 uv pip install -e ".[gpu-cu13]"
 ```
 
-The app auto-detects GPU availability at runtime and falls back to CPU if anything goes wrong — no configuration needed. The CPU sklearn path is auto-accelerated by [scikit-learn-intelex](https://github.com/uxlfoundation/scikit-learn-intelex)[^1]. You can also manually select backends (`cuML`, `sklearn`) in the sidebar.
+The app auto-detects GPU availability at runtime and falls back to CPU if anything goes wrong; no configuration needed. With the default `auto` backend, the faster library is chosen per method and dataset size from measured crossovers, even when a GPU is present: cuML for PCA from 500 samples and KMeans from 1000; UMAP only from 10000 samples; t-SNE only below 3000 samples (the collapse-safe exact solver is O(N^2)). **Select `cuml` explicitly to force the GPU**. The CPU sklearn path is auto-accelerated by [scikit-learn-intelex](https://github.com/uxlfoundation/scikit-learn-intelex)[^1]. You can also manually select backends (`cuML`, `sklearn`) in the sidebar.
 
 ## Usage
 

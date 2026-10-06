@@ -8,7 +8,7 @@ import numpy as np
 
 from shared.utils.logging_config import get_logger
 from shared.utils.backend import (
-    HAS_CUML_PACKAGE, HAS_CUPY_PACKAGE,
+    HAS_CUML_PACKAGE, HAS_CUPY_PACKAGE, auto_prefers_cuml,
     check_cuda_available, check_cuml_available,
 )
 
@@ -172,8 +172,8 @@ def reduce_dim(embeddings: np.ndarray, method: str = "PCA", seed: Optional[int] 
     use_cuml = False
     if backend == "cuml" and HAS_CUML and cuda_available:
         use_cuml = True
-    elif backend == "auto" and HAS_CUML and cuda_available and n_samples > 5000:
-        # Use cuML automatically for large datasets on GPU
+    elif backend == "auto" and HAS_CUML and cuda_available and auto_prefers_cuml(method, n_samples):
+        # Same measured per-method size rule as resolve_backend
         use_cuml = True
 
     start_time = time.time()
@@ -376,7 +376,7 @@ def run_kmeans(embeddings: np.ndarray, n_clusters: int, seed: Optional[int] = No
     if backend == "cuml" and HAS_CUML and cuda_available:
         logger.info("Using cuML backend for KMeans")
         result = _run_kmeans_cuml(embeddings, n_clusters, seed, n_workers)
-    elif backend == "auto" and HAS_CUML and cuda_available and n_samples > 500:
+    elif backend == "auto" and HAS_CUML and cuda_available and auto_prefers_cuml("KMEANS", n_samples):
         logger.info("Auto-selected cuML backend for KMeans (GPU available, large dataset)")
         result = _run_kmeans_cuml(embeddings, n_clusters, seed, n_workers)
     else:
