@@ -57,6 +57,15 @@ uv pip install -e ".[gpu-cu13]"
 
 The app auto-detects GPU availability at runtime and falls back to CPU if anything goes wrong — no configuration needed. The CPU sklearn path is auto-accelerated by [scikit-learn-intelex](https://github.com/uxlfoundation/scikit-learn-intelex)[^1]. You can also manually select backends (`cuML`, `sklearn`) in the sidebar.
 
+### Reproducibility
+
+To get reproducible projections and clusters, enable **Use fixed seed** in the sidebar and pin the backend instead of `auto`: the GPU backend is `cuML`, the CPU backend is `sklearn` (auto-accelerated by `scikit-learn-intelex` on x86 CPUs). With a seed and a pinned backend, results are identical across app restarts on both backends, with one exception: cuML t-SNE, which never reproduces exactly.
+
+- **PCA** is a deterministic decomposition, with no stochastic optimization involved. cuML PCA uses a full eigendecomposition and always returns the same result, seed or no seed. sklearn can auto-select a randomized SVD solver, so the app passes the seed to make it reproducible.
+- **UMAP** and **KMeans** reproduce exactly on both backends when a seed is set. (Seeded UMAP trades some speed for determinism.)
+- **t-SNE** reproduces on `sklearn` when a seed is set. cuML t-SNE does not reproduce, by a deliberate trade-off: `cuML ≥ 26.08` made its default FFT solver [deterministic under a fixed seed](https://github.com/rapidsai/cuml/pull/8123), but the FFT solver collapses to a degenerate ~1D line on highly homogeneous embeddings (#40), therefore our application pins cuML t-SNE to the `exact` solver, which is collapse-free but remains non-deterministic (GPU floating-point accumulation order varies between runs, and t-SNE's optimization amplifies the difference). **Select `sklearn` when t-SNE results need to be reproducible.**
+- `auto` chooses a backend from data size and hardware, so the same seed can run different algorithms on different machines. Exact coordinates may also differ across library versions and hardware; a seed guarantees repeatability within one environment, not across environments.
+
 ## Usage
 
 ### Standalone Apps

@@ -69,14 +69,15 @@ dev = [
 gpu = [
     "emb-explorer[gpu-cu12]",
 ]
+# cuML pins use PEP 440 normalization of RAPIDS CalVer: 26.8 == cuML 26.08.
 gpu-cu12 = [
     "torch>=2.0.0",
-    "cuml-cu12>=26.4",  # 26.4 removed the sklearn upper bound (compatible with sklearn>=1.8)
+    "cuml-cu12>=26.8",
     "pynvml>=11.0.0",
 ]
 gpu-cu13 = [
     "torch>=2.0.0",
-    "cuml-cu13>=26.4",  # 26.4 removed the sklearn upper bound (compatible with sklearn>=1.8)
+    "cuml-cu13>=26.8",
     "pynvml>=11.0.0",
 ]
 # Minimal GPU support for image embeddings generation (just PyTorch, no RAPIDS)
