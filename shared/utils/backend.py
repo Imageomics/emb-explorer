@@ -10,6 +10,7 @@ backend is first used.
 """
 
 import importlib.util
+import threading
 from typing import Tuple, Optional
 from shared.utils.logging_config import get_logger
 
@@ -28,6 +29,12 @@ HAS_TORCH_PACKAGE: bool = importlib.util.find_spec("torch") is not None
 
 # Cache CUDA availability to avoid repeated checks
 _cuda_check_cache: Optional[Tuple[bool, str]] = None
+
+# cuML availability: the real import is slow (tens of seconds cold) and not
+# safe to run from two threads at once, so it happens under a lock and a
+# success is cached. Only True is cached: a transient failure must not stick.
+_cuml_check_lock = threading.Lock()
+_cuml_available_cache: Optional[bool] = None
 
 
 def check_cuda_available() -> Tuple[bool, str]:
@@ -72,15 +79,37 @@ def check_cuda_available() -> Tuple[bool, str]:
     return _cuda_check_cache
 
 
+def _import_cuml() -> None:
+    """Perform the real cuML import (factored out so tests can stub it)."""
+    import cuml  # noqa: F401
+
+
 def check_cuml_available() -> bool:
-    """Check if cuML is available (actual import, for runtime use)."""
+    """Check if cuML is available (actual import, for runtime use).
+
+    Serialized with a lock: two Streamlit script runs resolving the backend
+    at the same moment would otherwise import cuML concurrently, and the
+    second importer can see a partially initialized package and get an
+    ImportError, which used to be reported as "cuML not available" (#49).
+    A successful import is cached so later calls return instantly.
+    """
+    global _cuml_available_cache
+
     if not HAS_CUML_PACKAGE:
         return False
-    try:
-        import cuml
+    if _cuml_available_cache:
         return True
-    except ImportError:
-        return False
+
+    with _cuml_check_lock:
+        if _cuml_available_cache:  # another thread finished while we waited
+            return True
+        try:
+            _import_cuml()
+        except ImportError as e:
+            logger.warning(f"cuML is installed but failed to import ({e}); using CPU backends")
+            return False
+        _cuml_available_cache = True
+        return True
 
 
 def resolve_backend(backend: str, operation: str = "general") -> str:

@@ -20,6 +20,7 @@ from shared.components.clustering_controls import (
 )
 from shared.utils.backend import check_cuda_available, resolve_backend, is_oom_error
 from shared.utils.logging_config import get_logger
+from shared.lib.session import is_running, session_tag, single_run
 
 logger = get_logger(__name__)
 
@@ -59,6 +60,7 @@ def render_embedding_section() -> Tuple[bool, Optional[str], Optional[str], int,
 
         # Handle embedding execution
         if embed_button and image_dir and os.path.isdir(image_dir):
+            logger.info(f"EMBEDDING START: {image_dir} ({session_tag()})")
             with StreamlitProgressContext(st.empty(), "Embedding complete!") as progress:
                 try:
                     embeddings, valid_paths = EmbeddingService.generate_embeddings(
@@ -119,7 +121,15 @@ def render_projection_section():
         dim_reduction_backend, seed = render_projection_controls()
 
         if st.button("Project to 2D", type="primary"):
-            _run_projection(embeddings, valid_paths, reduction_method, dim_reduction_backend, seed)
+            # Streamlit stops the older script run at its next st call once a
+            # newer one exists, so the newest run must always proceed: never
+            # refuse it (#49). Just make a duplicate visible in the log.
+            logger.info(f"Project to 2D clicked ({session_tag()})")
+            if is_running("projection_running"):
+                logger.warning(f"Duplicate projection request in this session; "
+                               f"Streamlit will stop the earlier run ({session_tag()})")
+            with single_run("projection_running"):
+                _run_projection(embeddings, valid_paths, reduction_method, dim_reduction_backend, seed)
 
 
 def render_kmeans_section():
@@ -140,17 +150,25 @@ def render_kmeans_section():
         clustering_backend, n_workers, seed = render_kmeans_controls()
 
         if st.button("Run KMeans", type="primary"):
-            _run_kmeans(embeddings, n_clusters, clustering_backend, n_workers, seed)
+            logger.info(f"Run KMeans clicked ({session_tag()})")
+            if is_running("kmeans_running"):
+                logger.warning(f"Duplicate KMeans request in this session; "
+                               f"Streamlit will stop the earlier run ({session_tag()})")
+            with single_run("kmeans_running"):
+                _run_kmeans(embeddings, n_clusters, clustering_backend, n_workers, seed)
 
 
 def _run_projection(embeddings, valid_paths, reduction_method, dim_reduction_backend, seed):
     """Run dim reduction and create the 2D scatter plot dataframe."""
     try:
-        cuda_available, device_info = check_cuda_available()
-        actual_backend = resolve_backend(dim_reduction_backend, "reduction")
+        # The first cuML probe of a session imports cuML (seconds, cold); show
+        # feedback so the button never looks dead and invites a second click.
+        with st.spinner("Checking compute backend..."):
+            cuda_available, device_info = check_cuda_available()
+            actual_backend = resolve_backend(dim_reduction_backend, "reduction")
 
         logger.info("=" * 60)
-        logger.info("PROJECTION START")
+        logger.info(f"PROJECTION START ({session_tag()})")
         logger.info(f"Device: {device_info} (CUDA: {'Yes' if cuda_available else 'No'})")
         logger.info(f"Backend: {actual_backend} (requested: {dim_reduction_backend})")
 
@@ -210,8 +228,9 @@ def _run_projection(embeddings, valid_paths, reduction_method, dim_reduction_bac
 def _run_kmeans(embeddings, n_clusters, clustering_backend, n_workers, seed):
     """Run KMeans on already-extracted embeddings and add labels to df_plot."""
     try:
-        actual_backend = resolve_backend(clustering_backend, "clustering")
-        logger.info(f"KMeans: k={n_clusters}, backend={actual_backend}")
+        with st.spinner("Checking compute backend..."):
+            actual_backend = resolve_backend(clustering_backend, "clustering")
+        logger.info(f"KMeans: k={n_clusters}, backend={actual_backend} ({session_tag()})")
 
         with st.spinner(f"Running KMeans (k={n_clusters})..."):
             labels = ClusteringService.run_kmeans_only_safe(
