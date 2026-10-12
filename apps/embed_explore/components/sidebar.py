@@ -55,6 +55,12 @@ def render_embedding_section() -> Tuple[bool, Optional[str], Optional[str], int,
                 value=32,
                 step=1
             )
+        recursive = st.checkbox(
+            "Include subfolders",
+            value=True,
+            key="embed_recursive",
+            help="Also embed images in nested folders (e.g. one folder per species).",
+        )
         embed_button = st.button("Run Embedding")
 
         # Handle embedding execution
@@ -63,11 +69,11 @@ def render_embedding_section() -> Tuple[bool, Optional[str], Optional[str], int,
                 try:
                     embeddings, valid_paths = EmbeddingService.generate_embeddings(
                         image_dir, model_name, batch_size, n_workers,
-                        progress_callback=progress
+                        progress_callback=progress, recursive=recursive,
                     )
 
                     if embeddings.shape[0] == 0:
-                        st.error("No valid image embeddings found.")
+                        progress.fail("No images found in this folder. Check the path.")
                         logger.warning("Embedding generation returned 0 embeddings")
                         st.session_state.embeddings = None
                         st.session_state.valid_paths = None
@@ -88,7 +94,7 @@ def render_embedding_section() -> Tuple[bool, Optional[str], Optional[str], int,
                         st.session_state.selected_image_idx = None
 
                 except Exception as e:
-                    st.error(f"Error during embedding: {e}")
+                    progress.fail(f"Error during embedding: {e}")
                     logger.exception("Embedding generation failed")
 
         elif embed_button:
@@ -147,7 +153,7 @@ def _run_projection(embeddings, valid_paths, reduction_method, dim_reduction_bac
     """Run dim reduction and create the 2D scatter plot dataframe."""
     try:
         cuda_available, device_info = check_cuda_available()
-        actual_backend = resolve_backend(dim_reduction_backend, "reduction")
+        actual_backend = resolve_backend(dim_reduction_backend, "reduction", n_samples=embeddings.shape[0], method=reduction_method)
 
         logger.info("=" * 60)
         logger.info("PROJECTION START")
@@ -210,7 +216,7 @@ def _run_projection(embeddings, valid_paths, reduction_method, dim_reduction_bac
 def _run_kmeans(embeddings, n_clusters, clustering_backend, n_workers, seed):
     """Run KMeans on already-extracted embeddings and add labels to df_plot."""
     try:
-        actual_backend = resolve_backend(clustering_backend, "clustering")
+        actual_backend = resolve_backend(clustering_backend, "clustering", n_samples=embeddings.shape[0])
         logger.info(f"KMeans: k={n_clusters}, backend={actual_backend}")
 
         with st.spinner(f"Running KMeans (k={n_clusters})..."):
@@ -327,7 +333,7 @@ def render_save_section():
                     )
                     st.info(f"Summary CSV saved at {csv_path}")
                 except Exception as e:
-                    save_status_placeholder.error(f"Error saving images: {e}")
+                    progress.fail(f"Error saving images: {e}")
         elif save_cluster_button:
             save_status_placeholder.warning("Please select at least one cluster.")
 
@@ -363,7 +369,7 @@ def render_save_section():
                     )
                     st.info(f"Summary CSV saved at {csv_path}")
                 except Exception as e:
-                    repartition_status_placeholder.error(f"Error repartitioning images: {e}")
+                    progress.fail(f"Error repartitioning images: {e}")
 
 
 def render_clustering_sidebar():

@@ -615,7 +615,7 @@ def _run_projection(filtered_df, reduction_method, dim_reduction_backend, seed):
     """Run dim reduction and create the 2D scatter plot dataframe."""
     try:
         cuda_available, device_info = check_cuda_available()
-        actual_backend = resolve_backend(dim_reduction_backend, "reduction")
+        actual_backend = resolve_backend(dim_reduction_backend, "reduction", n_samples=len(filtered_df), method=reduction_method)
 
         logger.info("=" * 60)
         logger.info("PROJECTION START")
@@ -678,7 +678,7 @@ def _run_projection(filtered_df, reduction_method, dim_reduction_backend, seed):
 def _run_kmeans(embeddings, n_clusters, clustering_backend, n_workers, seed):
     """Run KMeans on already-extracted embeddings and add labels to df_plot."""
     try:
-        actual_backend = resolve_backend(clustering_backend, "clustering")
+        actual_backend = resolve_backend(clustering_backend, "clustering", n_samples=embeddings.shape[0])
         logger.info(f"KMeans: k={n_clusters}, backend={actual_backend}")
 
         with st.spinner(f"Running KMeans (k={n_clusters})..."):

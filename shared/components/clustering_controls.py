@@ -52,7 +52,8 @@ def render_clustering_backend_controls():
                 "Dimensionality Reduction Backend",
                 options=dim_reduction_options,
                 index=0,
-                help="Backend for PCA/t-SNE/UMAP computation"
+                help="Backend for PCA/t-SNE/UMAP. auto picks the faster library per method and "
+                     "dataset size from measured crossovers; choose cuml to force the GPU."
             )
         
         with col2:
@@ -60,7 +61,8 @@ def render_clustering_backend_controls():
                 "Clustering Backend",
                 options=clustering_options,
                 index=0,
-                help="Backend for K-means clustering computation"
+                help="Backend for K-means. auto: sklearn below 1000 samples, cuML on GPU from "
+                     "there (measured crossover); choose cuml to force the GPU."
             )
         
         # Performance and reproducibility settings
@@ -100,7 +102,8 @@ def render_projection_controls():
         dim_reduction_backend = st.selectbox(
             "Dim Reduction Backend",
             options=dim_reduction_options, index=0,
-            help="Backend for PCA/t-SNE/UMAP computation",
+            help="Backend for PCA/t-SNE/UMAP. auto picks the faster library per method and "
+                 "dataset size from measured crossovers; choose cuml to force the GPU.",
             key="proj_backend"
         )
 
@@ -130,7 +133,8 @@ def render_kmeans_controls():
         clustering_backend = st.selectbox(
             "Clustering Backend",
             options=clustering_options, index=0,
-            help="Backend for K-means computation",
+            help="Backend for K-means. auto: sklearn below 1000 samples, cuML on GPU from "
+                 "there (measured crossover); choose cuml to force the GPU.",
             key="km_backend"
         )
         n_workers = st.number_input(
