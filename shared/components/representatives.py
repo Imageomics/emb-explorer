@@ -85,6 +85,10 @@ def render_representative_images(
         # Fill remaining slots with informative too-large placeholders.
         placeholders = too_large[: n_per_cluster - len(shown)]
 
+        # Nothing renderable in this cluster: every candidate (up to
+        # n_per_cluster * oversample, or the whole cluster if smaller) failed
+        # on all of its URL columns, and none was merely over the size cap,
+        # so there is not even a placeholder to show.
         if not shown and not placeholders:
             st.caption("No images available for this cluster.")
             continue
