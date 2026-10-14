@@ -290,9 +290,14 @@ def render_cluster_representatives():
                 return str(row[col])
         return None
 
+    def _details(idx):
+        row = df_plot.iloc[idx]
+        return {"id": str(row["uuid"]), "url": resolve_record_image_url(row)}
+
     render_representative_images(
         representatives,
         resolve_image=_resolve,
         n_per_cluster=n_per_cluster,
         caption_fn=_caption,
+        details_fn=_details,
     )

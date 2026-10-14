@@ -321,12 +321,13 @@ def get_record_image(
 
 
 def too_large_placeholder(
-    info: ImageTooLarge, size: int = 280
+    info: ImageTooLarge, size: int = 280, hint: str = "not downloaded"
 ) -> Image.Image:
     """Generate a placeholder tile for an over-cap image.
 
     Streamlit-free (plain PIL) so any renderer can use it; the clickable URL
-    is the renderer's job since an image can't carry a link.
+    is the renderer's job since an image can't carry a link. ``hint`` is the
+    third line and should tell the user where that link is.
     """
     img = Image.new("RGB", (size, size), (233, 236, 239))
     draw = ImageDraw.Draw(img)
@@ -334,7 +335,7 @@ def too_large_placeholder(
         font = ImageFont.load_default(size=max(12, size // 18))
     except TypeError:  # Pillow < 10.1: no size parameter
         font = ImageFont.load_default()
-    lines = ["Image too large", info.describe(), "not downloaded"]
+    lines = ["Image too large", info.describe(), hint]
     line_heights = []
     widths = []
     for line in lines:

@@ -206,15 +206,20 @@ def render_clustering_summary(show_taxonomy=False):
                 return path
             return None
 
-        def _local_caption(idx):
+        def _local_details(idx):
+            # Local images have no uuid or URL, and the path is the record id:
+            # show one "File path" label that previews the full path on hover
+            # and copies it on click (file names alone can be long and repeat).
             path = df_plot.iloc[idx]["image_path"]
-            return os.path.basename(path) if isinstance(path, str) else None
+            if not isinstance(path, str):
+                return None
+            return {"id": path, "id_short": "File path"}
 
         render_representative_images(
             representatives,
             resolve_image=_resolve_local_image,
             n_per_cluster=3,
-            caption_fn=_local_caption,
+            details_fn=_local_details,
         )
     else:
         # Precalculated app: show taxonomy tree (works with or without KMeans)
