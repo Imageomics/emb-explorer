@@ -38,11 +38,15 @@ class TestGenerateClusteringSummary:
         assert summary["Count"].sum() == 50
 
     def test_representatives_per_cluster(self):
+        # Representatives are ranked candidate lists, oversampled (default
+        # 3 * 4 = 12) so renderers can skip broken images; capped at cluster size.
         emb, labels, df = self._make_inputs(n_samples=30, n_clusters=3)
         _, reps = ClusteringService.generate_clustering_summary(emb, labels, df)
         for cluster_id, indices in reps.items():
             cluster_size = (labels == cluster_id).sum()
-            assert len(indices) <= min(3, cluster_size)
+            assert len(indices) <= min(12, cluster_size)
+            # Candidates are valid member indices of their cluster.
+            assert all(labels[i] == cluster_id for i in indices)
 
     def test_single_sample_cluster(self):
         """Cluster with 1 sample should have variance 0."""
