@@ -37,14 +37,14 @@ Visual exploration and clustering tool for image embeddings. Users can either br
     <td colspan="3"><b>Cluster 1</b></td>
   </tr>
   <tr>
-    <td width="33%">Canis simensis<br><code>dbb9ca8f</code> · <a href="https://inaturalist-open-data.s3.amazonaws.com/photos/334339733/original.jpg" target="_blank">source</a></td>
-    <td width="33%">Canis simensis<br><code>70f9ab9f</code> · <a href="https://inaturalist-open-data.s3.amazonaws.com/photos/134581592/original.jpeg" target="_blank">source</a></td>
-    <td width="33%">Canis simensis<br><code>4de7a1cf</code> · <a href="https://inaturalist-open-data.s3.amazonaws.com/photos/345255557/original.jpg" target="_blank">source</a></td>
+    <td>Canis simensis<br><code>dbb9ca8f</code> · <a href="https://inaturalist-open-data.s3.amazonaws.com/photos/334339733/original.jpg" target="_blank">source</a></td>
+    <td>Canis simensis<br><code>70f9ab9f</code> · <a href="https://inaturalist-open-data.s3.amazonaws.com/photos/134581592/original.jpeg" target="_blank">source</a></td>
+    <td>Canis simensis<br><code>4de7a1cf</code> · <a href="https://inaturalist-open-data.s3.amazonaws.com/photos/345255557/original.jpg" target="_blank">source</a></td>
   </tr>
   <tr>
-    <td><img src="docs/images/readme_rep_c1_1.png" alt="Ethiopian wolf" width="100%"></td>
-    <td><img src="docs/images/readme_rep_c1_2.png" alt="Ethiopian wolf" width="100%"></td>
-    <td><img src="docs/images/readme_rep_c1_3.png" alt="Ethiopian wolf" width="100%"></td>
+    <td><img src="docs/images/readme_rep_c1_1.png" alt="Ethiopian wolf" width="180"></td>
+    <td><img src="docs/images/readme_rep_c1_2.png" alt="Ethiopian wolf" width="180"></td>
+    <td><img src="docs/images/readme_rep_c1_3.png" alt="Ethiopian wolf" width="180"></td>
   </tr>
   <tr>
     <td colspan="3"><b>Cluster 2</b></td>
@@ -55,9 +55,9 @@ Visual exploration and clustering tool for image embeddings. Users can either br
     <td>Canis lycaon<br><code>a7edd26f</code> · <a href="https://inaturalist-open-data.s3.amazonaws.com/photos/104417928/original.jpg" target="_blank">source</a></td>
   </tr>
   <tr>
-    <td><img src="docs/images/readme_rep_c2_1.png" alt="paw print in snow" width="100%"></td>
-    <td><img src="docs/images/readme_rep_c2_2.png" alt="paw print in snow" width="100%"></td>
-    <td><img src="docs/images/representatives_tile_too_large.png" alt="placeholder shown for an image over the download cap" width="100%"></td>
+    <td><img src="docs/images/readme_rep_c2_1.png" alt="paw print in snow" width="180"></td>
+    <td><img src="docs/images/readme_rep_c2_2.png" alt="paw print in snow" width="180"></td>
+    <td><img src="docs/images/representatives_tile_too_large.png" alt="placeholder shown for an image over the download cap" width="180"></td>
   </tr>
 </table>
 
