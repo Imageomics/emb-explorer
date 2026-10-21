@@ -30,6 +30,39 @@ Visual exploration and clustering tool for image embeddings. Users can either br
 
 **Precalculated Embeddings** - Load parquet files (or directories of parquets) with precomputed embeddings, apply dynamic cascading filters, and explore clusters with taxonomy tree navigation. See [Data Format](docs/DATA_FORMAT.md) for the expected schema and [Backend Pipeline](docs/BACKEND_PIPELINE.md) for how embeddings flow through clustering and visualization.
 
+**Representative Images** - After KMeans, both apps show the three records closest to each cluster's centroid. Each tile carries the record name, a short id that copies the full id on click, and a source link that opens the image in a new tab; images that fail to load are skipped in favor of the next-closest record, and images over the 25 MiB download cap are shown as a placeholder with their source link intact. The example below is KMeans on [BioCLIP 2](https://huggingface.co/imageomics/bioclip-2) embeddings of a sample of canid images. See [Representative Images](docs/REPRESENTATIVE_IMAGES.md) for how selection and fallback work.
+
+<table>
+  <tr>
+    <td colspan="3"><b>Cluster 1</b></td>
+  </tr>
+  <tr>
+    <td width="33%">Canis simensis<br><code>dbb9ca8f</code> · <a href="https://inaturalist-open-data.s3.amazonaws.com/photos/334339733/original.jpg" target="_blank">source</a></td>
+    <td width="33%">Canis simensis<br><code>70f9ab9f</code> · <a href="https://inaturalist-open-data.s3.amazonaws.com/photos/134581592/original.jpeg" target="_blank">source</a></td>
+    <td width="33%">Canis simensis<br><code>4de7a1cf</code> · <a href="https://inaturalist-open-data.s3.amazonaws.com/photos/345255557/original.jpg" target="_blank">source</a></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/readme_rep_c1_1.png" alt="Ethiopian wolf" width="100%"></td>
+    <td><img src="docs/images/readme_rep_c1_2.png" alt="Ethiopian wolf" width="100%"></td>
+    <td><img src="docs/images/readme_rep_c1_3.png" alt="Ethiopian wolf" width="100%"></td>
+  </tr>
+  <tr>
+    <td colspan="3"><b>Cluster 2</b></td>
+  </tr>
+  <tr>
+    <td>Canis lycaon<br><code>ea070e30</code> · <a href="https://inaturalist-open-data.s3.amazonaws.com/photos/176686074/original.jpeg" target="_blank">source</a></td>
+    <td>Canis lycaon<br><code>55af17f4</code> · <a href="https://inaturalist-open-data.s3.amazonaws.com/photos/176686067/original.jpeg" target="_blank">source</a></td>
+    <td>Canis lycaon<br><code>a7edd26f</code> · <a href="https://inaturalist-open-data.s3.amazonaws.com/photos/104417928/original.jpg" target="_blank">source</a></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/readme_rep_c2_1.png" alt="paw print in snow" width="100%"></td>
+    <td><img src="docs/images/readme_rep_c2_2.png" alt="paw print in snow" width="100%"></td>
+    <td><img src="docs/images/representatives_tile_too_large.png" alt="placeholder shown for an image over the download cap" width="100%"></td>
+  </tr>
+</table>
+
+<sub>Photos [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/deed.en): Björn Reese, Miguel A. Casado, Bill Fintel, corium.</sub>
+
 ## Installation
 
 Requires Python 3.10–3.13. We recommend using [uv](https://github.com/astral-sh/uv) for package management.
