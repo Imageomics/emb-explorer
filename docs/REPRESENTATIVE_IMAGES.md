@@ -1,6 +1,6 @@
 # Representative images per cluster
 
-After a KMeans run, both apps show a **Representative Images** panel: for every cluster, up to three images of the records that sit closest to the cluster's center. This page explains how those records are chosen, how their images are loaded, what happens when an image cannot be shown, and how to reproduce every case with a small test dataset.
+After a KMeans run, both apps show a **Representative Images** panel: for every cluster, up to three images of the records that sit closest to the cluster's center. This page explains how those records are chosen, how their images are loaded, what happens when an image cannot be shown.
 
 ## 1. Overview: What the panel shows
 
@@ -91,7 +91,7 @@ flowchart TD
 
 In words, there are two fallback layers:
 
-1. **Per record, across URL columns.** A record may hold image URLs in several columns (`identifier`, `image_url`, `url`, `img_url`, `image`; see [`IMAGE_URL_COLUMNS` and `get_record_image` in `shared/utils/images.py`](../shared/utils/images.py)). The app tries them in that order and uses the first one that actually loads. A broken column moves on to the next. A column whose image is over the size cap also moves on; it is remembered only if no column loads.
+1. **Per record, across URL columns.** A record may hold image URLs in several columns (`identifier`, `image_url`, `url`, `img_url`, `image`; see [`shared/utils/images.py`](../shared/utils/images.py)). The app tries them in that order and uses the first one that actually loads. A broken column moves on to the next. A column whose image is over the size cap also moves on; it is remembered only if no column loads.
 2. **Per cluster, across candidates.** The renderer walks the ranked candidates until it has three real images. A record with nothing loadable is skipped and consumes no slot. A record whose best outcome is "too large" is set aside; real images fill the slots first, and the set-aside records fill only the slots that would otherwise stay empty, as placeholder tiles. If there is nothing at all, the cluster shows the empty caption.
 
 <img src="images/representatives_candidate_walk.png" alt="how the renderer walks the ranked candidates" width="900">
